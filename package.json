@@ -8,6 +8,7 @@
     "dev": "nodemon src/server.js",
     "migrate": "node src/database/migrate.js",
     "seed": "node src/database/seed.js",
+    "seed-master-data": "node src/database/seed-master-data.js",
     "generate-dummy-data": "node src/database/generate_dummy_data.js",
     "generate-docs": "node src/database/generate_documents_only.js",
     "seed-eoaf": "node src/database/seed-dummy-eoaf.js"

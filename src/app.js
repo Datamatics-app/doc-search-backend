@@ -21,6 +21,8 @@ const eoafRoutes          = require('./modules/eoaf/eoaf.routes');
 const eoafLdRoutes        = require('./modules/eoaf-ld/eoaf-ld.routes');
 const eoafScrapcadRoutes  = require('./modules/eoaf-scrapcad/eoaf-scrapcad.routes');
 const eoafGeneralRoutes   = require('./modules/eoaf-general/eoaf-general.routes');
+const masterDataRoutes    = require('./modules/master-data/master-data.routes');
+const dashboardMetaRoutes = require('./modules/master-data/dashboard-meta.routes');
 
 const app = express();
 
@@ -92,6 +94,8 @@ app.use('/api/v1/eoaf',           apiLimiter,  eoafRoutes);
 app.use('/api/v1/eoaf/ld',        apiLimiter,  eoafLdRoutes);
 app.use('/api/v1/eoaf/scrapcad',  apiLimiter,  eoafScrapcadRoutes);
 app.use('/api/v1/eoaf/general',   apiLimiter,  eoafGeneralRoutes);
+app.use('/api/v1/admin',          apiLimiter,  masterDataRoutes);
+app.use('/api/v1/dashboard',      apiLimiter,  dashboardMetaRoutes);
 
 const openApiSpec = createOpenApiSpec(app);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(openApiSpec));
