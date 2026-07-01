@@ -158,11 +158,13 @@ class MasterDataService {
   }
 
   async getDashboardMetaData() {
-    const [companies, clusters, statuses, processTypes] = await Promise.all([
+    const [companies, clusters, statuses, processTypes, soaClauses, eoafTypes] = await Promise.all([
       authQuery('SELECT code, name FROM companies WHERE is_active = true ORDER BY name ASC, code ASC'),
       authQuery('SELECT name FROM clusters WHERE is_active = true ORDER BY name ASC'),
       authQuery('SELECT name FROM statuses WHERE is_active = true ORDER BY name ASC'),
       authQuery('SELECT name FROM process_types WHERE is_active = true ORDER BY name ASC'),
+      authQuery('SELECT name FROM soa_clauses WHERE is_active = true ORDER BY name ASC'),
+      authQuery('SELECT name FROM eoaf_types WHERE is_active = true ORDER BY name ASC'),
     ]);
 
     return {
@@ -170,6 +172,8 @@ class MasterDataService {
       clusters: clusters.rows.map((row) => row.name),
       statuses: statuses.rows.map((row) => row.name),
       processTypes: processTypes.rows.map((row) => row.name),
+      soaClauses: soaClauses.rows.map((row) => row.name),
+      eoafTypes: eoafTypes.rows.map((row) => row.name),
     };
   }
 

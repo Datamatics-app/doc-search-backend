@@ -10,6 +10,13 @@ const seedData = {
   clusters: ['Corporate', 'Technology', 'Admin', 'Logistics'],
   statuses: ['Draft', 'Pending', 'Approved', 'Rejected'],
   'process-types': ['Tender', 'RFQ', 'Single Source', 'Renewal'],
+  'soa-clauses': [
+    'Standard Delivery Clause',
+    'Force Majeure',
+    'Payment on Delivery',
+    'Warranty and Liability',
+  ],
+  'eoaf-types': ['Standard', 'Emergency', 'Repeat Order', 'Amendment'],
 };
 
 const insertRows = async (table, rows, columnName) => {
@@ -37,6 +44,8 @@ const seed = async () => {
     await insertRows('clusters', seedData.clusters, 'name');
     await insertRows('statuses', seedData.statuses, 'name');
     await insertRows('process_types', seedData['process-types'], 'name');
+    await insertRows('soa_clauses', seedData['soa-clauses'], 'name');
+    await insertRows('eoaf_types', seedData['eoaf-types'], 'name');
     console.log('Master data seed completed');
   } catch (error) {
     console.error('Master data seed failed:', error.message);

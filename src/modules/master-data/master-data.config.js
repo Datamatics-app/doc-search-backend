@@ -38,6 +38,24 @@ const resourceConfig = {
       name: { required: true, maxLength: 100, type: 'string' },
     },
   },
+  'soa-clauses': {
+    table: 'soa_clauses',
+    label: 'SOA Clause',
+    selectClause: 'id, name, is_active, created_at, updated_at',
+    orderBy: 'name ASC',
+    fields: {
+      name: { required: true, maxLength: 255, type: 'string' },
+    },
+  },
+  'eoaf-types': {
+    table: 'eoaf_types',
+    label: 'eOAF Type',
+    selectClause: 'id, name, is_active, created_at, updated_at',
+    orderBy: 'name ASC',
+    fields: {
+      name: { required: true, maxLength: 50, type: 'string' },
+    },
+  },
 };
 
 function getConfig(resource) {
