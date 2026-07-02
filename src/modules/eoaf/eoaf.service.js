@@ -66,17 +66,39 @@ const BASE_JOIN = `
 // columns (all aliased for clarity)
 const SEARCH_SELECT = `
   f.r_object_id,
-  f.eoaf_subject,
-  f.clusters,
   f.oaf_num,
+  f.file_ref_no,
+  f.eoaf_subject,
   f.eoaf_type,
   f.process_type,
   f.company_code,
+  f.department,
   f.budget,
   f.soa_clause,
+  f.soa_value,
   f.total_comm_incl_contigency,
-  f.status,
   f.initiation_date,
+  f.total_negotiated_savings_pe,
+  f.total_negotiated_savings_rs,
+  f.capex_fy,
+  f.status,
+  f.negotiation_saving_fcg,
+  f.clusters,
+
+  -- Approval chain: initiator stage
+  f.eval_cc, f.eval_cc_approval_date, f.eval_cc_grade, f.eval_cc_position,
+  f.eval_intender, f.eval_intender_approval_date, f.eval_intender_grade, f.eval_intender_position,
+  f.eval_fcg, f.eval_fcg_approval_date, f.eval_fcg_grade, f.eval_fcg_position,
+
+  -- Approval chain: reviewer stage
+  f.checker_cc, f.checker_cc_approval_date, f.checker_cc_grade, f.checker_cc_position,
+  f.checker_fcg, f.checker_fcg_approval_date, f.checker_fcg_grade, f.checker_fcg_position,
+  f.checker_intender, f.checker_intender_app_date, f.checker_intender_grade, f.checker_intender_position,
+
+  -- Approval chain: approver stage
+  f.approver1, f.approver1_approval_date, f.approver1_grade, f.approver_1_position,
+  f.final_approver, f.final_approver_app_date, f.final_approver_grade, f.final_approver_position,
+
   s.owner_name,
   s.r_creation_date
 `;
