@@ -62,11 +62,11 @@ class MasterDataController {
 
   async getDashboardMetaData(req, res) {
     try {
-      const data = await masterDataService.getDashboardMetaData();
+      const data = await masterDataService.getDashboardMetaData(req.params.documentType);
       sendSuccess(res, data, 'Dashboard metadata fetched successfully');
     } catch (err) {
       if (err.isOperational) return sendError(res, err.message, err.statusCode);
-      logger.error('getDashboardMetaData failed', { error: err.message, stack: err.stack });
+      logger.error('getDashboardMetaData failed', { documentType: req.params.documentType, error: err.message, stack: err.stack });
       sendError(res, 'Failed to fetch dashboard metadata', 500);
     }
   }

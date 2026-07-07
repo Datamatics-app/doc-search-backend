@@ -5,6 +5,6 @@ const router = express.Router();
 
 const masterDataController = require('./master-data.controller');
 
-router.get('/meta-data', masterDataController.getDashboardMetaData.bind(masterDataController));
+router.get('/meta-data/:documentType?', masterDataController.getDashboardMetaData.bind(masterDataController));
 
 module.exports = router;
