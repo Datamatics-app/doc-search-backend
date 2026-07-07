@@ -4,6 +4,37 @@ const { authQuery } = require('../../config/database');
 const { getConfig, resourceConfig } = require('./master-data.config');
 
 const PG_UNIQUE_VIOLATION = '23505';
+const DASHBOARD_METADATA_CONFIG = {
+  eoaf: {
+    objectType: 'xoaf_form',
+    attributes: [
+      { key: 'eoafType', table: 'xoaf_form_eoaf_type', valueColumn: 'value' },
+      { key: 'companyCode', table: 'xoaf_form_company_code', valueColumn: 'value' },
+      { key: 'clusters', table: 'xoaf_form_clusters', valueColumn: 'value' },
+      { key: 'status', table: 'xoaf_form_status', valueColumn: 'value' },
+      { key: 'processType', table: 'xoaf_form_process_type', valueColumn: 'value' },
+      { key: 'budget', table: 'xoaf_form_budget', valueColumn: 'value' },
+      { key: 'category', table: 'xoaf_form_category', valueColumn: 'value' },
+    ],
+  },
+  general: {
+    objectType: 'xoaf_general_form',
+    attributes: [
+      { key: 'companyCode', table: 'xoaf_general_form_company_code', valueColumn: 'value' },
+      { key: 'status', table: 'xoaf_general_form_status', valueColumn: 'value' },
+      { key: 'category', table: 'xoaf_general_form_category', valueColumn: 'value' },
+    ],
+  },
+  ld: {
+    objectType: 'xoaf_ld_form',
+    attributes: [
+      { key: 'orderType', table: 'xoaf_ld_form_order_type', valueColumn: 'value' },
+      { key: 'clusters', table: 'xoaf_ld_form_clusters', valueColumn: 'value' },
+      { key: 'companyCode', table: 'xoaf_ld_form_company_code', valueColumn: 'value' },
+      { key: 'companyName', table: 'xoaf_ld_form_company_name', valueColumn: 'value' },
+    ],
+  },
+};
 
 class MasterDataService {
   async list(resource, queryParams = {}) {
@@ -157,24 +188,37 @@ class MasterDataService {
     return this._formatRow(resource, rows[0] || current);
   }
 
-  async getDashboardMetaData() {
-    const [companies, clusters, statuses, processTypes, soaClauses, eoafTypes] = await Promise.all([
-      authQuery('SELECT code, name FROM companies WHERE is_active = true ORDER BY name ASC, code ASC'),
-      authQuery('SELECT name FROM clusters WHERE is_active = true ORDER BY name ASC'),
-      authQuery('SELECT name FROM statuses WHERE is_active = true ORDER BY name ASC'),
-      authQuery('SELECT name FROM process_types WHERE is_active = true ORDER BY name ASC'),
-      authQuery('SELECT name FROM soa_clauses WHERE is_active = true ORDER BY name ASC'),
-      authQuery('SELECT name FROM eoaf_types WHERE is_active = true ORDER BY name ASC'),
-    ]);
+  async getDashboardMetaData(documentType = 'eoaf') {
+    const config = this._getDashboardMetadataConfig(documentType);
+    const queries = config.attributes.map(({ table, valueColumn }) =>
+      authQuery(`SELECT ${valueColumn} FROM ${table} WHERE is_active = true ORDER BY ${valueColumn} ASC`)
+    );
+    const results = await Promise.all(queries);
 
     return {
-      companies: companies.rows.map((row) => ({ code: row.code, name: row.name })),
-      clusters: clusters.rows.map((row) => row.name),
-      statuses: statuses.rows.map((row) => row.name),
-      processTypes: processTypes.rows.map((row) => row.name),
-      soaClauses: soaClauses.rows.map((row) => row.name),
-      eoafTypes: eoafTypes.rows.map((row) => row.name),
+      documentType: config.documentType,
+      objectType: config.objectType,
+      ...Object.fromEntries(
+        config.attributes.map((attribute, index) => [
+          attribute.key,
+          results[index].rows.map((row) => row[attribute.valueColumn]),
+        ])
+      ),
     };
+  }
+
+  _getDashboardMetadataConfig(documentType = 'eoaf') {
+    const normalizedDocumentType = String(documentType || 'eoaf').trim().toLowerCase();
+    const config = DASHBOARD_METADATA_CONFIG[normalizedDocumentType];
+
+    if (!config) {
+      const error = new Error(`Unsupported document type '${documentType}'`);
+      error.statusCode = 400;
+      error.isOperational = true;
+      throw error;
+    }
+
+    return { documentType: normalizedDocumentType, ...config };
   }
 
   _normalizePayload(resource, payload = {}) {
