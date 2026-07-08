@@ -1,11 +1,12 @@
 // master-data.service.js
 
 const { authQuery } = require('../../config/database');
-const { getConfig, resourceConfig } = require('./master-data.config');
+const { getConfig } = require('./master-data.config');
+const { DocumentTypes, normalizeDocumentType } = require('../../enums/documentTypes');
 
 const PG_UNIQUE_VIOLATION = '23505';
 const DASHBOARD_METADATA_CONFIG = {
-  eoaf: {
+  [DocumentTypes.EOAF]: {
     objectType: 'xoaf_form',
     attributes: [
       { key: 'eoafType', table: 'xoaf_form_eoaf_type', valueColumn: 'value' },
@@ -17,7 +18,7 @@ const DASHBOARD_METADATA_CONFIG = {
       { key: 'category', table: 'xoaf_form_category', valueColumn: 'value' },
     ],
   },
-  general: {
+  [DocumentTypes.GENERAL]: {
     objectType: 'xoaf_general_form',
     attributes: [
       { key: 'companyCode', table: 'xoaf_general_form_company_code', valueColumn: 'value' },
@@ -25,7 +26,7 @@ const DASHBOARD_METADATA_CONFIG = {
       { key: 'category', table: 'xoaf_general_form_category', valueColumn: 'value' },
     ],
   },
-  ld: {
+  [DocumentTypes.LD]: {
     objectType: 'xoaf_ld_form',
     attributes: [
       { key: 'orderType', table: 'xoaf_ld_form_order_type', valueColumn: 'value' },
@@ -37,8 +38,8 @@ const DASHBOARD_METADATA_CONFIG = {
 };
 
 class MasterDataService {
-  async list(resource, queryParams = {}) {
-    const config = getConfig(resource);
+  async list(resource, queryParams = {}, documentType = null) {
+    const config = getConfig(resource, documentType);
     // page/limit/isActive are already validated & normalized by
     // validateListQuery middleware before this is called.
     const page = queryParams.page;
@@ -63,15 +64,15 @@ class MasterDataService {
     );
 
     return {
-      items: rows.map((row) => this._formatRow(resource, row)),
+      items: rows.map((row) => this._formatRow(resource, row, documentType)),
       total: countResult.rows[0].total,
       page,
       limit,
     };
   }
 
-  async getById(resource, id) {
-    const config = getConfig(resource);
+  async getById(resource, id, documentType = null) {
+    const config = getConfig(resource, documentType);
     const { rows } = await authQuery(`SELECT ${config.selectClause} FROM ${config.table} WHERE id = $1`, [id]);
 
     if (rows.length === 0) {
@@ -81,18 +82,18 @@ class MasterDataService {
       throw error;
     }
 
-    return this._formatRow(resource, rows[0]);
+    return this._formatRow(resource, rows[0], documentType);
   }
 
-  async create(resource, payload) {
-    const config = getConfig(resource);
-    const normalizedPayload = this._normalizePayload(resource, payload);
+  async create(resource, payload, documentType = null) {
+    const config = getConfig(resource, documentType);
+    const normalizedPayload = this._normalizePayload(resource, payload, documentType);
 
     // Pre-check gives a friendly, fast-path error for the common case.
     // The DB's UNIQUE constraint (caught below) is the actual source of
     // truth and protects against the race where two requests pass this
     // check concurrently.
-    await this._ensureUnique(resource, normalizedPayload);
+    await this._ensureUnique(resource, normalizedPayload, null, documentType);
 
     const columns = [];
     const placeholders = [];
@@ -117,16 +118,16 @@ class MasterDataService {
         `INSERT INTO ${config.table} (${columns.join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING ${config.selectClause}`,
         params
       );
-      return this._formatRow(resource, rows[0]);
+      return this._formatRow(resource, rows[0], documentType);
     } catch (err) {
       throw this._translateDbError(err, config);
     }
   }
 
-  async update(resource, id, payload) {
-    const config = getConfig(resource);
-    const current = await this.getById(resource, id);
-    const normalizedPayload = this._normalizePayload(resource, payload);
+  async update(resource, id, payload, documentType = null) {
+    const config = getConfig(resource, documentType);
+    const current = await this.getById(resource, id, documentType);
+    const normalizedPayload = this._normalizePayload(resource, payload, documentType);
 
     if (Object.keys(normalizedPayload).length === 0) {
       const error = new Error('No fields to update');
@@ -135,7 +136,7 @@ class MasterDataService {
       throw error;
     }
 
-    await this._ensureUnique(resource, normalizedPayload, id);
+    await this._ensureUnique(resource, normalizedPayload, id, documentType);
 
     const updates = [];
     const params = [];
@@ -166,7 +167,7 @@ class MasterDataService {
         `UPDATE ${config.table} SET ${updates.join(', ')} WHERE id = $${params.length} RETURNING ${config.selectClause}`,
         params
       );
-      return this._formatRow(resource, rows[0]);
+      return this._formatRow(resource, rows[0], documentType);
     } catch (err) {
       throw this._translateDbError(err, config);
     }
@@ -177,18 +178,18 @@ class MasterDataService {
    * delete the row — named/documented explicitly so API consumers aren't
    * surprised the record still exists and is still fetchable by id.
    */
-  async deactivate(resource, id) {
-    const config = getConfig(resource);
-    const current = await this.getById(resource, id);
+  async deactivate(resource, id, documentType = null) {
+    const config = getConfig(resource, documentType);
+    const current = await this.getById(resource, id, documentType);
     const { rows } = await authQuery(
       `UPDATE ${config.table} SET is_active = false, updated_at = NOW() WHERE id = $1 RETURNING ${config.selectClause}`,
       [id]
     );
 
-    return this._formatRow(resource, rows[0] || current);
+    return this._formatRow(resource, rows[0] || current, documentType);
   }
 
-  async getDashboardMetaData(documentType = 'eoaf') {
+  async getDashboardMetaData(documentType = DocumentTypes.EOAF) {
     const config = this._getDashboardMetadataConfig(documentType);
     const queries = config.attributes.map(({ table, valueColumn }) =>
       authQuery(`SELECT ${valueColumn} FROM ${table} WHERE is_active = true ORDER BY ${valueColumn} ASC`)
@@ -207,9 +208,10 @@ class MasterDataService {
     };
   }
 
-  _getDashboardMetadataConfig(documentType = 'eoaf') {
-    const normalizedDocumentType = String(documentType || 'eoaf').trim().toLowerCase();
-    const config = DASHBOARD_METADATA_CONFIG[normalizedDocumentType];
+  _getDashboardMetadataConfig(documentType = DocumentTypes.EOAF) {
+    const normalizedDocumentType = normalizeDocumentType(documentType);
+    const resolvedDocumentType = normalizedDocumentType || DocumentTypes.EOAF;
+    const config = DASHBOARD_METADATA_CONFIG[resolvedDocumentType];
 
     if (!config) {
       const error = new Error(`Unsupported document type '${documentType}'`);
@@ -218,15 +220,21 @@ class MasterDataService {
       throw error;
     }
 
-    return { documentType: normalizedDocumentType, ...config };
+    return { documentType: resolvedDocumentType, ...config };
   }
 
-  _normalizePayload(resource, payload = {}) {
-    const config = getConfig(resource);
+  _normalizePayload(resource, payload = {}, documentType = null) {
+    const config = getConfig(resource, documentType);
     const normalized = {};
 
     for (const fieldName of Object.keys(config.fields)) {
-      if (payload[fieldName] !== undefined) normalized[fieldName] = payload[fieldName];
+      if (payload[fieldName] !== undefined) {
+        normalized[fieldName] = payload[fieldName];
+      } else if (fieldName === 'value' && payload.name !== undefined) {
+        normalized[fieldName] = payload.name;
+      } else if (fieldName === 'name' && payload.value !== undefined) {
+        normalized[fieldName] = payload.value;
+      }
     }
 
     if (payload.isActive !== undefined) normalized.isActive = payload.isActive;
@@ -235,8 +243,8 @@ class MasterDataService {
     return normalized;
   }
 
-  async _ensureUnique(resource, payload, id = null) {
-    const config = getConfig(resource);
+  async _ensureUnique(resource, payload, id = null, documentType = null) {
+    const config = getConfig(resource, documentType);
 
     if (resource === 'companies') {
       if (payload.code === undefined && payload.name === undefined) return;
@@ -258,13 +266,16 @@ class MasterDataService {
       return;
     }
 
-    if (payload.name === undefined) return;
+    const uniqueFieldName = Object.keys(config.fields).find((fieldName) => fieldName === 'value' || fieldName === 'name') || 'name';
+    const uniqueValue = payload[uniqueFieldName] ?? payload.value ?? payload.name;
+
+    if (uniqueValue === undefined) return;
 
     const { rows } = await authQuery(
       id === null
-        ? `SELECT id FROM ${config.table} WHERE LOWER(name) = LOWER($1)`
-        : `SELECT id FROM ${config.table} WHERE LOWER(name) = LOWER($1) AND id != $2`,
-      id === null ? [payload.name.trim()] : [payload.name.trim(), id]
+        ? `SELECT id FROM ${config.table} WHERE LOWER(${uniqueFieldName}) = LOWER($1)`
+        : `SELECT id FROM ${config.table} WHERE LOWER(${uniqueFieldName}) = LOWER($1) AND id != $2`,
+      id === null ? [String(uniqueValue).trim()] : [String(uniqueValue).trim(), id]
     );
 
     if (rows.length > 0) {
@@ -290,8 +301,8 @@ class MasterDataService {
     return err;
   }
 
-  _formatRow(resource, row) {
-    const config = getConfig(resource);
+  _formatRow(resource, row, documentType = null) {
+    const config = getConfig(resource, documentType);
     const base = {
       id: row.id,
       isActive: row.is_active,

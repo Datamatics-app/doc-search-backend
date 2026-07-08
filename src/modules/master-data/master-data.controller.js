@@ -7,7 +7,7 @@ const logger = require('../../config/logger');
 class MasterDataController {
   async listMasterData(req, res) {
     try {
-      const { items, total, page, limit } = await masterDataService.list(req.params.resource, req.query);
+      const { items, total, page, limit } = await masterDataService.list(req.params.resource, req.query, req.params.documentType);
       sendPaginated(res, items, total, page, limit, `${req.params.resource} fetched successfully`);
     } catch (err) {
       if (err.isOperational) return sendError(res, err.message, err.statusCode);
@@ -18,7 +18,7 @@ class MasterDataController {
 
   async getMasterDataById(req, res) {
     try {
-      const item = await masterDataService.getById(req.params.resource, req.params.id);
+      const item = await masterDataService.getById(req.params.resource, req.params.id, req.params.documentType);
       sendSuccess(res, item, 'Master data item fetched successfully');
     } catch (err) {
       if (err.isOperational) return sendError(res, err.message, err.statusCode);
@@ -29,7 +29,7 @@ class MasterDataController {
 
   async createMasterData(req, res) {
     try {
-      const item = await masterDataService.create(req.params.resource, req.body);
+      const item = await masterDataService.create(req.params.resource, req.body, req.params.documentType);
       sendSuccess(res, item, 'Master data item created successfully', 201);
     } catch (err) {
       if (err.isOperational) return sendError(res, err.message, err.statusCode);
@@ -40,7 +40,7 @@ class MasterDataController {
 
   async updateMasterData(req, res) {
     try {
-      const item = await masterDataService.update(req.params.resource, req.params.id, req.body);
+      const item = await masterDataService.update(req.params.resource, req.params.id, req.body, req.params.documentType);
       sendSuccess(res, item, 'Master data item updated successfully');
     } catch (err) {
       if (err.isOperational) return sendError(res, err.message, err.statusCode);
@@ -51,7 +51,7 @@ class MasterDataController {
 
   async deactivateMasterData(req, res) {
     try {
-      const item = await masterDataService.deactivate(req.params.resource, req.params.id);
+      const item = await masterDataService.deactivate(req.params.resource, req.params.id, req.params.documentType);
       sendSuccess(res, item, 'Master data item deactivated successfully');
     } catch (err) {
       if (err.isOperational) return sendError(res, err.message, err.statusCode);

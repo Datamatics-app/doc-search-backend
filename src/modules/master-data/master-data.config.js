@@ -1,65 +1,159 @@
 // master-data.config.js
 
-const resourceConfig = {
-  companies: {
-    table: 'companies',
-    label: 'Company',
-    selectClause: 'id, code, name, is_active, created_at, updated_at',
-    orderBy: 'name ASC, code ASC',
-    fields: {
-      code: { required: true, maxLength: 20, type: 'string' },
-      name: { required: true, maxLength: 150, type: 'string' },
+const { DocumentTypes, normalizeDocumentType } = require('../../enums/documentTypes');
+const { normalizeResourceType, ResourceTypes } = require('../../enums/resourceTypes');
+
+function resolveConfigParams(resource, documentType = null) {
+  const normalizedResource = normalizeResourceType(resource) || normalizeResourceType(documentType);
+  const normalizedDocumentType = normalizeDocumentType(documentType) || normalizeDocumentType(resource);
+
+  return {
+    normalizedResource,
+    normalizedDocumentType,
+  };
+}
+
+const documentTypeResourceConfig = {
+  [DocumentTypes.EOAF]: {
+    [ResourceTypes.EOAF_TYPE]: {
+      table: 'xoaf_form_eoaf_type',
+      label: 'eOAF Type',
+      selectClause: 'id, value, is_active, created_at, updated_at',
+      orderBy: 'value ASC',
+      fields: {
+        value: { required: true, maxLength: 255, type: 'string' },
+      },
+    },
+    [ResourceTypes.COMPANY_CODE]: {
+      table: 'xoaf_form_company_code',
+      label: 'Company Code',
+      selectClause: 'id, value, is_active, created_at, updated_at',
+      orderBy: 'value ASC',
+      fields: {
+        value: { required: true, maxLength: 255, type: 'string' },
+      },
+    },
+    [ResourceTypes.CLUSTERS]: {
+      table: 'xoaf_form_clusters',
+      label: 'Cluster',
+      selectClause: 'id, value, is_active, created_at, updated_at',
+      orderBy: 'value ASC',
+      fields: {
+        value: { required: true, maxLength: 255, type: 'string' },
+      },
+    },
+    [ResourceTypes.STATUS]: {
+      table: 'xoaf_form_status',
+      label: 'Status',
+      selectClause: 'id, value, is_active, created_at, updated_at',
+      orderBy: 'value ASC',
+      fields: {
+        value: { required: true, maxLength: 255, type: 'string' },
+      },
+    },
+    [ResourceTypes.PROCESS_TYPE]: {
+      table: 'xoaf_form_process_type',
+      label: 'Process Type',
+      selectClause: 'id, value, is_active, created_at, updated_at',
+      orderBy: 'value ASC',
+      fields: {
+        value: { required: true, maxLength: 255, type: 'string' },
+      },
+    },
+    [ResourceTypes.BUDGET]: {
+      table: 'xoaf_form_budget',
+      label: 'Budget',
+      selectClause: 'id, value, is_active, created_at, updated_at',
+      orderBy: 'value ASC',
+      fields: {
+        value: { required: true, maxLength: 255, type: 'string' },
+      },
+    },
+    [ResourceTypes.CATEGORY]: {
+      table: 'xoaf_form_category',
+      label: 'Category',
+      selectClause: 'id, value, is_active, created_at, updated_at',
+      orderBy: 'value ASC',
+      fields: {
+        value: { required: true, maxLength: 255, type: 'string' },
+      },
     },
   },
-  clusters: {
-    table: 'clusters',
-    label: 'Cluster',
-    selectClause: 'id, name, is_active, created_at, updated_at',
-    orderBy: 'name ASC',
-    fields: {
-      name: { required: true, maxLength: 100, type: 'string' },
+  [DocumentTypes.GENERAL]: {
+    [ResourceTypes.COMPANY_CODE]: {
+      table: 'xoaf_general_form_company_code',
+      label: 'Company Code',
+      selectClause: 'id, value, is_active, created_at, updated_at',
+      orderBy: 'value ASC',
+      fields: {
+        value: { required: true, maxLength: 255, type: 'string' },
+      },
+    },
+    [ResourceTypes.STATUS]: {
+      table: 'xoaf_general_form_status',
+      label: 'Status',
+      selectClause: 'id, value, is_active, created_at, updated_at',
+      orderBy: 'value ASC',
+      fields: {
+        value: { required: true, maxLength: 255, type: 'string' },
+      },
+    },
+    [ResourceTypes.CATEGORY]: {
+      table: 'xoaf_general_form_category',
+      label: 'Category',
+      selectClause: 'id, value, is_active, created_at, updated_at',
+      orderBy: 'value ASC',
+      fields: {
+        value: { required: true, maxLength: 255, type: 'string' },
+      },
     },
   },
-  statuses: {
-    table: 'statuses',
-    label: 'Status',
-    selectClause: 'id, name, is_active, created_at, updated_at',
-    orderBy: 'name ASC',
-    fields: {
-      name: { required: true, maxLength: 50, type: 'string' },
+  [DocumentTypes.LD]: {
+    [ResourceTypes.ORDER_TYPE]: {
+      table: 'xoaf_ld_form_order_type',
+      label: 'Order Type',
+      selectClause: 'id, value, is_active, created_at, updated_at',
+      orderBy: 'value ASC',
+      fields: {
+        value: { required: true, maxLength: 255, type: 'string' },
+      },
     },
-  },
-  'process-types': {
-    table: 'process_types',
-    label: 'Process type',
-    selectClause: 'id, name, is_active, created_at, updated_at',
-    orderBy: 'name ASC',
-    fields: {
-      name: { required: true, maxLength: 100, type: 'string' },
+    [ResourceTypes.CLUSTERS]: {
+      table: 'xoaf_ld_form_clusters',
+      label: 'Cluster',
+      selectClause: 'id, value, is_active, created_at, updated_at',
+      orderBy: 'value ASC',
+      fields: {
+        value: { required: true, maxLength: 255, type: 'string' },
+      },
     },
-  },
-  'soa-clauses': {
-    table: 'soa_clauses',
-    label: 'SOA Clause',
-    selectClause: 'id, name, is_active, created_at, updated_at',
-    orderBy: 'name ASC',
-    fields: {
-      name: { required: true, maxLength: 255, type: 'string' },
+    [ResourceTypes.COMPANY_CODE]: {
+      table: 'xoaf_ld_form_company_code',
+      label: 'Company Code',
+      selectClause: 'id, value, is_active, created_at, updated_at',
+      orderBy: 'value ASC',
+      fields: {
+        value: { required: true, maxLength: 255, type: 'string' },
+      },
     },
-  },
-  'eoaf-types': {
-    table: 'eoaf_types',
-    label: 'eOAF Type',
-    selectClause: 'id, name, is_active, created_at, updated_at',
-    orderBy: 'name ASC',
-    fields: {
-      name: { required: true, maxLength: 50, type: 'string' },
+    [ResourceTypes.COMPANY_NAME]: {
+      table: 'xoaf_ld_form_company_name',
+      label: 'Company Name',
+      selectClause: 'id, value, is_active, created_at, updated_at',
+      orderBy: 'value ASC',
+      fields: {
+        value: { required: true, maxLength: 255, type: 'string' },
+      },
     },
   },
 };
 
-function getConfig(resource) {
-  const config = resourceConfig[resource];
+function getConfig(resource, documentType = null) {
+  const { normalizedDocumentType, normalizedResource } = resolveConfigParams(resource, documentType);
+  const config = normalizedDocumentType && normalizedResource
+    ? documentTypeResourceConfig[normalizedDocumentType]?.[normalizedResource]
+    : null;
+
   if (!config) {
     const error = new Error('Unsupported resource');
     error.statusCode = 400;
@@ -69,4 +163,4 @@ function getConfig(resource) {
   return config;
 }
 
-module.exports = { resourceConfig, getConfig };
+module.exports = { documentTypeResourceConfig, getConfig, resolveConfigParams };
