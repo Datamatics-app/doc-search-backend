@@ -14,40 +14,44 @@ const {
 } = require('./master-data.validation');
 
 router.use(authenticate);
-router.use('/:resource', validateResourceParam);
 
 router.get(
-  '/:resource',
+  '/:documentType/:resource',
   requireAdmin,
+  validateResourceParam,
   validateListQuery,
   masterDataController.listMasterData.bind(masterDataController)
 );
 
 router.get(
-  '/:resource/:id',
+  '/:documentType/:resource/:id',
   requireAdmin,
+  validateResourceParam,
   validateIdParam,
   masterDataController.getMasterDataById.bind(masterDataController)
 );
 
 router.post(
-  '/:resource',
+  '/:documentType/:resource',
   requireAdmin,
+  validateResourceParam,
   validateBody('create'),
   masterDataController.createMasterData.bind(masterDataController)
 );
 
 router.put(
-  '/:resource/:id',
+  '/:documentType/:resource/:id',
   requireAdmin,
+  validateResourceParam,
   validateIdParam,
   validateBody('update'),
   masterDataController.updateMasterData.bind(masterDataController)
 );
 
 router.delete(
-  '/:resource/:id',
+  '/:documentType/:resource/:id',
   requireAdmin,
+  validateResourceParam,
   validateIdParam,
   masterDataController.deactivateMasterData.bind(masterDataController)
 );

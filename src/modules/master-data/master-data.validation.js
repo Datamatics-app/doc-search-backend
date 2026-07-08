@@ -1,26 +1,40 @@
 // master-data.validation.js
 
-const { resourceConfig } = require('./master-data.config');
+const { documentTypeResourceConfig, resolveConfigParams } = require('./master-data.config');
 const { sendError } = require('../../utils/response');
 
 /**
- * Ensures :resource in the URL is one we support, before anything else runs.
- * Without this, an unsupported resource falls through to the service layer
- * where it does get caught (_getConfig throws), but only after other
- * middleware/logic has already run.
+ * Ensures :documentType and :resource in the URL are one we support.
  */
 function validateResourceParam(req, res, next) {
-  if (!resourceConfig[req.params.resource]) {
-    return sendError(res, `Unsupported resource '${req.params.resource}'`, 400);
+  const documentType = req.params.documentType;
+  const resource = req.params.resource;
+
+  if (!documentType || !resource) {
+    return sendError(res, 'Document type and resource are required', 400);
   }
+
+  const { normalizedDocumentType, normalizedResource } = resolveConfigParams(resource, documentType);
+  if (!normalizedDocumentType) {
+    return sendError(res, `Unsupported document type '${documentType}'`, 400);
+  }
+
+  if (!normalizedResource) {
+    return sendError(res, `Unsupported resource '${resource}' for document type '${documentType}'`, 400);
+  }
+
+  const config = documentTypeResourceConfig[normalizedDocumentType]?.[normalizedResource];
+  if (!config) {
+    return sendError(res, `Unsupported resource '${resource}' for document type '${documentType}'`, 400);
+  }
+
+  req.params.documentType = normalizedDocumentType;
+  req.params.resource = normalizedResource;
   next();
 }
 
 /**
- * :id must be a positive integer. Previously an id like "abc" or "1; DROP"
- * would be passed straight to the DB driver as a bind parameter — not a SQL
- * injection risk (it's parameterized), but it produces an ugly raw
- * postgres/driver error instead of a clean 400.
+ * :id must be a positive integer.
  */
 function validateIdParam(req, res, next) {
   const id = req.params.id;
@@ -32,10 +46,7 @@ function validateIdParam(req, res, next) {
 }
 
 /**
- * Normalizes & validates page/limit/isActive query params up front so the
- * service layer can trust req.query instead of re-deriving safe defaults
- * from potentially NaN values (e.g. Math.max(1, parseInt('abc', 10)) is
- * NaN, not 1 — that NaN was previously flowing straight into LIMIT/OFFSET).
+ * Normalizes & validates page/limit/isActive query params up front.
  */
 function validateListQuery(req, res, next) {
   const rawPage = req.query.page;
@@ -76,17 +87,20 @@ function isPlainString(value) {
 
 /**
  * Validates req.body against the resource's field config.
- * mode: 'create' (all required fields must be present) or 'update'
- * (fields are optional, but whatever is present must still be well-formed;
- * at least one recognized field must be present).
  */
 function validateBody(mode) {
   return (req, res, next) => {
-    const config = resourceConfig[req.params.resource];
+    const documentType = req.params.documentType;
+    const resource = req.params.resource;
+    const { normalizedDocumentType, normalizedResource } = resolveConfigParams(resource, documentType);
+    const config = normalizedDocumentType && normalizedResource ? documentTypeResourceConfig[normalizedDocumentType]?.[normalizedResource] : null;
     const body = req.body || {};
     const errors = [];
 
-    // Companies accepts "isActive" in addition to its declared fields.
+    if (!config) {
+      return sendError(res, `Unsupported resource '${resource}' for document type '${documentType}'`, 400);
+    }
+
     const fieldNames = Object.keys(config.fields);
     let sawRecognizedField = false;
 
@@ -119,7 +133,6 @@ function validateBody(mode) {
       }
     }
 
-    // isActive is accepted on every resource, both camelCase and snake_case.
     const isActiveRaw = body.isActive !== undefined ? body.isActive : body.is_active;
     if (isActiveRaw !== undefined) {
       sawRecognizedField = true;
