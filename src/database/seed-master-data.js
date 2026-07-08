@@ -62,6 +62,20 @@ const seedData = {
     ],
     budget: ['PROJ-CAPEX', 'CAPEX', 'Capex', 'OPEX', 'Opex', 'OPEX-CAPEX', 'OPEX-REVENUE', 'Revenue Income'],
     category: ['Emergency', 'Normal', 'Urgent'],
+    soaClause: [
+      '4 a) (i)- L1 vendor',
+      '4 a) (iii) a- OEM',
+      '2.2 a) i) - L1 vendor',
+      '2.2 (ii a)- Single Party',
+      '2.2 (ii b)- Other Than L1',
+      '4 a) (ii)- Single party',
+      'L1 vendor',
+      'Other Than L1',
+      'Single Party',
+      'Repeat Order',
+      'Limited Tendering',
+      'Sole Sourcing',
+    ],
   },
   general: {
     companyCode: ['2300', '2670', '4100', '2600', '2200', '1000', '2000', '2800', '4520', '3100', '2660', '2100', '2700'],
@@ -198,6 +212,7 @@ const seed = async () => {
     await insertRows('xoaf_form_process_type', seedData.eoaf.processType);
     await insertRows('xoaf_form_budget', seedData.eoaf.budget);
     await insertRows('xoaf_form_category', seedData.eoaf.category);
+    await insertRows('xoaf_form_soa_clauses', seedData.eoaf.soaClause, 'name');
 
     await insertRows('xoaf_general_form_company_code', seedData.general.companyCode);
     await insertRows('xoaf_general_form_status', seedData.general.status);

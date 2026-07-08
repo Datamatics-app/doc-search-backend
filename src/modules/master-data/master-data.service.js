@@ -16,6 +16,7 @@ const DASHBOARD_METADATA_CONFIG = {
       { key: 'processType', table: 'xoaf_form_process_type', valueColumn: 'value' },
       { key: 'budget', table: 'xoaf_form_budget', valueColumn: 'value' },
       { key: 'category', table: 'xoaf_form_category', valueColumn: 'value' },
+      { key: 'soaClause', table: 'soa_clauses', valueColumn: 'name' },
     ],
   },
   [DocumentTypes.GENERAL]: {

@@ -78,6 +78,15 @@ const documentTypeResourceConfig = {
         value: { required: true, maxLength: 255, type: 'string' },
       },
     },
+    [ResourceTypes.SOA_CLAUSE]: {
+      table: 'soa_clauses',
+      label: 'SOA Clause',
+      selectClause: 'id, name AS value, is_active, created_at, updated_at',
+      orderBy: 'name ASC',
+      fields: {
+        value: { required: true, maxLength: 255, type: 'string' },
+      },
+    },
   },
   [DocumentTypes.GENERAL]: {
     [ResourceTypes.COMPANY_CODE]: {
