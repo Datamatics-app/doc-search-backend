@@ -6,6 +6,7 @@ const ResourceTypes = Object.freeze({
   PROCESS_TYPE: 'process-type',
   BUDGET: 'budget',
   CATEGORY: 'category',
+  SOA_CLAUSE: 'soa-clause',
   ORDER_TYPE: 'order-type',
   COMPANY_NAME: 'company-name',
 });
