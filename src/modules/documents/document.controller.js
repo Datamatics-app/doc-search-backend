@@ -27,8 +27,15 @@ class DocumentController {
       }
 
       const download = String(req.query.download || '').toLowerCase() === 'true';
-
-      return download ? res.download(filePath) : res.sendFile(filePath);
+      const responseOptions = {
+        headers: {
+          'X-Document-Path': doc.doc_file_path,
+        },
+      };
+      
+      return download
+        ? res.download(filePath, path.basename(doc.doc_file_path), responseOptions)
+        : res.sendFile(filePath, responseOptions);
     } catch (err) {
       return sendError(res, 'Failed to fetch document', 500);
     }
