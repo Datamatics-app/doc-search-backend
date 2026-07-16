@@ -1,5 +1,6 @@
 // eoaf.service.js
 const { query, withTransaction } = require('../../config/database');
+const logger = require('../../config/logger');
 
 const parseInteger = (value) => {
   if (value === undefined || value === null || value === '') return null;
@@ -57,10 +58,28 @@ const buildWhereClause = (filters = {}) => {
   };
 };
 
+// ── FORM-LEVEL DOCUMENT JOIN ────────────────────────────────────────────────
+// NOTE: eoaf_file_path_s has no version/timestamp column — r_object_id DESC
+const FORM_DOC_JOIN = `
+  LEFT JOIN (
+    SELECT
+      r_object_id,
+      doc_parent_object_id,
+      doc_object_type,
+      doc_file_path,
+      ROW_NUMBER() OVER (
+        PARTITION BY doc_parent_object_id, doc_object_type
+        ORDER BY r_object_id DESC
+      ) AS rn
+    FROM eoaf_file_path_s
+    WHERE doc_object_type = 'xoaf_form'
+  ) fp ON fp.doc_parent_object_id = f.r_object_id AND fp.rn = 1
+`;
 
 const BASE_JOIN = `
   FROM xoaf_form_s f
   LEFT JOIN dm_sysobject_s s ON s.r_object_id = f.r_object_id
+  ${FORM_DOC_JOIN}
 `;
 
 // columns (all aliased for clarity)
@@ -100,7 +119,12 @@ const SEARCH_SELECT = `
   f.final_approver, f.final_approver_app_date, f.final_approver_grade, f.final_approver_position,
 
   s.owner_name,
-  s.r_creation_date
+  s.r_creation_date,
+
+  -- Form-level document reference (for direct "print"/download in the UI)
+  fp.r_object_id  AS doc_object_id,
+  fp.doc_file_path AS doc_file_path,
+  fp.doc_object_type AS doc_object_type
 `;
 
 class EoafService {
@@ -110,74 +134,81 @@ class EoafService {
     const offset = (parseInteger(page) - 1) * parseInteger(limit);
     const { whereClause, params } = buildWhereClause(filters);
 
-    const countResult = await query(
-      `SELECT COUNT(*) AS count ${BASE_JOIN} ${whereClause}`,
-      params
-    );
+    const countSql = `SELECT COUNT(*) As count ${BASE_JOIN} ${whereClause}`;
+    logger.info(`RAW COUNT QUERY : ${countSql}`, { params });
+    const countResult = await query(countSql, params);
 
-    const { rows } = await query(
-      `SELECT ${SEARCH_SELECT}
+    const selectSql = `SELECT ${SEARCH_SELECT}
        ${BASE_JOIN}
        ${whereClause}
        ORDER BY f.r_object_id DESC
        LIMIT  $${params.length + 1}
-       OFFSET $${params.length + 2}`,
-      [...params, parseInteger(limit), offset]
-    );
+       OFFSET $${params.length + 2}`;
+    const selectParams = [...params, parseInteger(limit), offset];
 
-    // COUNT alias works for both pg and mssql after explicit AS count
+    logger.info(`RAW SEARCH QUERY : ${selectSql}`, { params: selectParams });
+    const { rows } = await query(selectSql, selectParams);
+
+    const enriched = rows.map(row => ({
+      ...row,
+      file_name: row.doc_file_path
+        ? row.doc_file_path.split(/[\\/]/).pop()
+        : null,
+      doc_file_path: undefined,
+    }));
+
     const total = parseInt(countResult.rows[0]?.count ?? countResult.rows[0]?.COUNT ?? 0, 10);
 
-    return { rows, total };
+    return { rows: enriched, total };
   }
 
-  // Get Single Form (full detail)
   async getFormById(id) {
-    const { rows } = await query(
-      `SELECT f.*, s.owner_name, s.r_creation_date, s.r_modify_date, s.r_modifier
+    const sql = `SELECT f.*, s.owner_name, s.r_creation_date, s.r_modify_date, s.r_modifier,
+       fp.r_object_id AS doc_object_id, fp.doc_file_path
        ${BASE_JOIN}
        WHERE f.r_object_id = $1
-       LIMIT 1`,
-      [id]
-    );
+       LIMIT 1`;
+    logger.info(`RAW GET FORM QUERY : ${sql}`, { id });
+    const { rows } = await query(sql, [id]);
     return rows[0] || null;
   }
 
-  // Enclosures 
+  // Enclosures
   async listEnclosuresByForm(formId, { page = 1, limit = 50 }) {
     const offset = (parseInteger(page) - 1) * parseInteger(limit);
 
-  // COUNT query stays the same
-    const countResult = await query(
-      `SELECT COUNT(*) AS count FROM xoaf_enclosure_s WHERE form_id = $1`,
-      [formId]
-    );
+    const countSql = `SELECT COUNT(*) AS count FROM xoaf_enclosure_s WHERE form_id = $1`;
+    logger.info(`RAW ENCLOSURE COUNT QUERY : ${countSql}`, { formId });
+    const countResult = await query(countSql, [formId]);
 
-    const { rows } = await query(
-      `SELECT 
+    // NOTE: eoaf_file_path_s has no version/timestamp column — tiebreak on
+    // r_object_id DESC as a best-effort "most recent" proxy. See FORM_DOC_JOIN
+    // comment above for details.
+    const selectSql = `SELECT
         e.*,
         fp.doc_file_path,
         s.owner_name       AS created_by,
         s.r_creation_date  AS created_on
       FROM xoaf_enclosure_s e
       LEFT JOIN (
-      SELECT 
-        doc_r_object_id,
-        doc_file_path,
-        ROW_NUMBER() OVER (
-          PARTITION BY doc_r_object_id 
-          ORDER BY i_vstamp DESC   -- picks the latest vstamp row
-        ) AS rn
-      FROM source_file_path_s
-    ) fp 
-      ON fp.doc_r_object_id = e.r_object_id 
-      AND fp.rn = 1                -- only the max vstamp row
+        SELECT
+          r_object_id,
+          doc_r_object_id,
+          doc_file_path,
+          ROW_NUMBER() OVER (
+            PARTITION BY doc_r_object_id
+            ORDER BY r_object_id DESC
+          ) AS rn
+        FROM eoaf_file_path_s
+      ) fp
+        ON fp.doc_r_object_id = e.r_object_id
+        AND fp.rn = 1
       LEFT JOIN dm_sysobject_s s ON s.r_object_id = e.form_id
       WHERE e.form_id = $1
       ORDER BY e.r_object_id ASC
-      LIMIT $2 OFFSET $3`,
-      [formId, parseInteger(limit), offset]
-    );
+      LIMIT $2 OFFSET $3`;
+    logger.info(`RAW ENCLOSURE SEARCH QUERY : ${selectSql}`, { formId, limit, offset });
+    const { rows } = await query(selectSql, [formId, parseInteger(limit), offset]);
 
     const total = parseInt(
       countResult.rows[0]?.count ?? countResult.rows[0]?.COUNT ?? 0,
@@ -206,9 +237,9 @@ class EoafService {
   // ── Documents ──────────────────────────────────────────────────────────────
   async getFormDocument(formId) {
     const { rows } = await query(
-      `SELECT * FROM source_file_path_s
+      `SELECT * FROM eoaf_file_path_s
        WHERE doc_r_object_id = $1
-       ORDER BY i_vstamp DESC
+       ORDER BY r_object_id DESC
        LIMIT 1`,
       [formId]
     );
@@ -217,9 +248,9 @@ class EoafService {
 
   async getEnclosureDocument(enclosureId) {
     const { rows } = await query(
-      `SELECT * FROM source_file_path_s
+      `SELECT * FROM eoaf_file_path_s
        WHERE doc_r_object_id = $1
-       ORDER BY i_vstamp DESC
+       ORDER BY r_object_id DESC
        LIMIT 1`,
       [enclosureId]
     );
@@ -228,7 +259,7 @@ class EoafService {
 
   async getDocumentById(id) {
     const { rows } = await query(
-      `SELECT * FROM source_file_path_s WHERE doc_r_object_id = $1 LIMIT 1`,
+      `SELECT * FROM eoaf_file_path_s WHERE doc_r_object_id = $1 LIMIT 1`,
       [id]
     );
     return rows[0] || null;

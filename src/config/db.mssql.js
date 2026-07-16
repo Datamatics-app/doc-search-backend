@@ -5,11 +5,11 @@ const mssqlConfig = {
   server:   process.env.MSSQL_HOST     || 'localhost',
   port:     parseInt(process.env.MSSQL_PORT || '1433', 10),
   database: process.env.MSSQL_DATABASE || 'dm_General_docbase',
-  user:     process.env.MSSQL_USER     || 'sa',
-  password: process.env.MSSQL_PASSWORD || '',
+  user:     process.env.MSSQL_USER     || 'Dmsadminprod',
+  password: process.env.MSSQL_PASSWORD, // no hardcoded fallback — fail loudly if unset
   options: {
-    encrypt:                process.env.MSSQL_ENCRYPT !== 'false', // true for Azure
-    trustServerCertificate: process.env.MSSQL_TRUST_CERT === 'true', // for self-signed certs
+    encrypt:                process.env.MSSQL_ENCRYPT !== 'false',
+    trustServerCertificate: process.env.MSSQL_TRUST_CERT === 'true',
     enableArithAbort:       true,
   },
   pool: {
@@ -18,6 +18,10 @@ const mssqlConfig = {
     idleTimeoutMillis: parseInt(process.env.MSSQL_IDLE_TIMEOUT || '30000', 10),
   },
 };
+
+if (!mssqlConfig.password) {
+  throw new Error('[MSSQL] MSSQL_PASSWORD env var is required and not set.');
+}
 
 let poolPromise = null;
 
@@ -65,15 +69,35 @@ const convertPagination = (sqlStr) =>
     'OFFSET $2 ROWS FETCH NEXT $1 ROWS ONLY'
   );
 
-/**
- * Apply all SQL translations in order.
- */
+// Bare "LIMIT n" (no OFFSET) → "SELECT TOP (n) ..." with LIMIT clause stripped.
+// Only matches a LIMIT that trails the statement (optionally followed by ; or
+// whitespace) so it doesn't accidentally eat a LIMIT that's part of a
+// LIMIT/OFFSET pair already handled above.
+const convertLimitOnly = (sqlStr) => {
+  const trimmed = sqlStr.trimEnd();
+  const limitMatch = trimmed.match(/\sLIMIT\s+(@p\d+|\d+)\s*;?\s*$/i);
+  if (!limitMatch) return sqlStr;
+
+  const n = limitMatch[1];
+  const withoutLimit = trimmed.slice(0, limitMatch.index);
+
+  // Insert TOP (n) right after the first SELECT keyword (handles leading
+  // whitespace/newlines and an optional DISTINCT).
+  const withTop = withoutLimit.replace(
+    /^(\s*SELECT\s+)(DISTINCT\s+)?/i,
+    (m, selectKw, distinctKw = '') => `${selectKw}TOP (${n}) ${distinctKw}`
+  );
+
+  return withTop;
+};
+
 const translateSql = (pgSql) => {
   let out = pgSql;
   out = convertPlaceholders(out);
   out = convertIlike(out);
   out = convertQuotedIdentifiers(out);
   out = convertPagination(out);
+  out = convertLimitOnly(out); // catches any LIMIT n left over after pagination pass
   return out;
 };
 
