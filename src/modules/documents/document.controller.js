@@ -12,11 +12,55 @@ class DocumentController {
    * any doc_r_object_id (form, enclosure, attachment …) and either streams
    * it inline or triggers a browser download.
    *
+   * doc_file_path is stored as a full UNC path, e.g.
+   *   \\prdcontentn\Documentum3\data\General\content_storage_01\...\fb.pdf
+   * The Node process runs on Windows, so this is used as-is — no local
+   * path resolution against __dirname. The Windows service account
+   * running Node must have read access to the \\prdcontentn\Documentum3 share.
    */
   async getDocument(req, res) {
     try {
       const doc = await documentService.getByDocObjectId(req.params.id);
+      return this._streamDocument(doc, req, res, 'getDocument');
+    } catch (err) {
+      console.error('[getDocument] unexpected error:', err);
+      return sendError(res, 'Failed to fetch document', 500);
+    }
+  }
 
+  /**
+   * GET /api/v1/documents/by-object-id/:id[?download=true]
+   *
+   * Same behavior as getDocument, but looks the row up by its own
+   * r_object_id (the mapping row's primary key) instead of doc_r_object_id
+   * (the document/business object's id). Kept as a separate endpoint
+   * rather than a single "guess the id type" handler, since the two ids
+   * have different lookup semantics (one row vs. potentially many rows
+   * per document) and their formats aren't a reliable enough signal to
+   * branch on automatically.
+   */
+  async getDocumentByRObjectId(req, res) {
+    try {
+      const doc = await documentService.getByRObjectId(req.params.id);
+      return this._streamDocument(doc, req, res, 'getDocumentByRObjectId');
+    } catch (err) {
+      console.error('[getDocumentByRObjectId] unexpected error:', err);
+      return sendError(res, 'Failed to fetch document', 500);
+    }
+  }
+
+  /**
+   * Shared implementation for resolving a DB row to a file on the NAS
+   * and streaming/downloading it. Used by both getDocument and
+   * getDocumentByRObjectId so the path-resolution, access-check, and
+   * response logic lives in exactly one place.
+   *
+   * @param {object|null} doc     - row returned from the DB lookup
+   * @param {object}      req
+   * @param {object}      res
+   * @param {string}      logTag  - which caller this is, for log context
+   */
+  async _streamDocument(doc, req, res, logTag) {
       if (!doc || !doc.doc_file_path) {
         return sendError(res, 'Document not found', 404);
       }
@@ -24,7 +68,7 @@ class DocumentController {
       const filePath = resolveNasPath(doc.doc_file_path);
 
       if (!filePath) {
-        console.error('[getDocument] invalid/unexpected doc_file_path:', doc.doc_file_path);
+        console.error(`[${logTag}] invalid/unexpected doc_file_path:`, doc.doc_file_path);
         return sendError(res, 'Document path is invalid', 400);
       }
 
@@ -36,10 +80,6 @@ class DocumentController {
       const download = String(req.query.download || '').toLowerCase() === 'true';
 
       return download ? res.download(filePath) : res.sendFile(filePath);
-    } catch (err) {
-      console.error('[getDocument] unexpected error:', err);
-      return sendError(res, 'Failed to fetch document', 500);
-    }
   }
 
   /**
@@ -51,6 +91,12 @@ class DocumentController {
    * on the NAS share via its UNC path, and streams a zip archive back
    * to the client.
    *
+   * - Supports mixed file types: pdf, doc, docx, tiff, jpg, png, etc.
+   * - Handles duplicate filenames by appending _(n) before the extension.
+   * - Skips IDs that are not found in the DB, have an invalid path, or
+   *   are unreachable/missing on the NAS, and reports them via the
+   *   X-Skipped-Ids header & final log.
+   * - If zero files are found, returns 404 instead of an empty zip.
    */
   async downloadZip(req, res) {
     const { ids } = req.body; // validated by bulkDownloadValidator

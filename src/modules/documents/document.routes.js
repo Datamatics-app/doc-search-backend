@@ -19,6 +19,17 @@ router.use(authenticate);
 router.get('/:id', idValidator, validate, documentController.getDocument.bind(documentController));
 
 /**
+ * GET /api/v1/documents/by-object-id/:id
+ *
+ * Same as above, but looks the row up by r_object_id — the mapping row's
+ * own primary key — instead of doc_r_object_id. Use this when the caller
+ * only has the row's r_object_id (e.g. from a listing/search result) and
+ * not the document's doc_r_object_id.
+ * Add ?download=true to trigger a browser file download instead of inline.
+ */
+router.get('/by-object-id/:id', idValidator, validate, documentController.getDocumentByRObjectId.bind(documentController));
+
+/**
  * POST /api/v1/documents/download-zip
  *
  * Accepts a JSON body: { ids: ["id1", "id2", ...] }   (max 50 ids)
