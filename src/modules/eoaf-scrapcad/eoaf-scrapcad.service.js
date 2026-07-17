@@ -96,7 +96,7 @@ class EoafScrapcadService {
 
   async getFormDocument(formId) {
     const { rows } = await query(
-      'SELECT * FROM source_file_path_s WHERE doc_r_object_id = $1 ORDER BY i_vstamp DESC LIMIT 1',
+      'SELECT * FROM eoaf_file_path_s WHERE doc_r_object_id = $1 ORDER BY i_vstamp DESC LIMIT 1',
       [formId]
     );
     return rows[0] || null;
@@ -104,7 +104,7 @@ class EoafScrapcadService {
 
   async getEnclosureDocument(enclosureId) {
     const { rows } = await query(
-      'SELECT * FROM source_file_path_s WHERE doc_r_object_id = $1 ORDER BY i_vstamp DESC LIMIT 1',
+      'SELECT * FROM eoaf_file_path_s WHERE doc_r_object_id = $1 ORDER BY i_vstamp DESC LIMIT 1',
       [enclosureId]
     );
     return rows[0] || null;

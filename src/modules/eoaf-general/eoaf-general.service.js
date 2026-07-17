@@ -103,10 +103,10 @@ class EoafGeneralService {
     return rows[0] || null;
   }
 
-  // Document retrieval (shared source_file_path_s table)
+  // Document retrieval (shared eoaf_file_path_s table)
   async getFormDocument(formId) {
     const { rows } = await query(
-      'SELECT * FROM source_file_path_s WHERE doc_r_object_id = $1 ORDER BY i_vstamp DESC LIMIT 1',
+      'SELECT * FROM eoaf_file_path_s WHERE doc_r_object_id = $1 ORDER BY i_vstamp DESC LIMIT 1',
       [formId]
     );
     return rows[0] || null;
@@ -114,7 +114,7 @@ class EoafGeneralService {
 
   async getAttachmentDocument(attachmentId) {
     const { rows } = await query(
-      'SELECT * FROM source_file_path_s WHERE doc_r_object_id = $1 ORDER BY i_vstamp DESC LIMIT 1',
+      'SELECT * FROM eoaf_file_path_s WHERE doc_r_object_id = $1 ORDER BY i_vstamp DESC LIMIT 1',
       [attachmentId]
     );
     return rows[0] || null;

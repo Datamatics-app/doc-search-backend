@@ -373,7 +373,7 @@ const insertScrapEnclosure = (client, row) =>
 
 const insertSourceFile = (client, docFilePath, docObjectId) =>
   client.query(
-    `INSERT INTO source_file_path_s (r_object_id, i_is_replica, i_vstamp, doc_file_path, doc_r_object_id)
+    `INSERT INTO eoaf_file_path_s (r_object_id, i_is_replica, i_vstamp, doc_file_path, doc_r_object_id)
      VALUES ($1,$2,$3,$4,$5)`,
     [generateId(), 0, 0, docFilePath, docObjectId]
   );

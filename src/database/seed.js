@@ -454,13 +454,13 @@ const seedDocbaseSampleData = async (client) => {
   // Seed document file mappings
   for (const row of docbaseFileRows) {
     const { rows: existingRows } = await client.query(
-      'SELECT 1 FROM source_file_path_s WHERE r_object_id = $1 AND doc_r_object_id = $2',
+      'SELECT 1 FROM eoaf_file_path_s WHERE r_object_id = $1 AND doc_r_object_id = $2',
       [row.r_object_id, row.doc_r_object_id]
     );
     if (existingRows.length > 0) continue;
 
     await client.query(
-      `INSERT INTO source_file_path_s (r_object_id, i_is_replica, i_vstamp, doc_file_path, doc_r_object_id)
+      `INSERT INTO eoaf_file_path_s (r_object_id, i_is_replica, i_vstamp, doc_file_path, doc_r_object_id)
        VALUES ($1,$2,$3,$4,$5)`,
       [row.r_object_id, row.i_is_replica, row.i_vstamp, row.doc_file_path, row.doc_r_object_id]
     );

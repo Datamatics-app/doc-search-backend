@@ -168,7 +168,7 @@ class EoafService {
           PARTITION BY doc_r_object_id 
           ORDER BY i_vstamp DESC   -- picks the latest vstamp row
         ) AS rn
-      FROM source_file_path_s
+      FROM eoaf_file_path_s
     ) fp 
       ON fp.doc_r_object_id = e.r_object_id 
       AND fp.rn = 1                -- only the max vstamp row
@@ -206,7 +206,7 @@ class EoafService {
   // ── Documents ──────────────────────────────────────────────────────────────
   async getFormDocument(formId) {
     const { rows } = await query(
-      `SELECT * FROM source_file_path_s
+      `SELECT * FROM eoaf_file_path_s
        WHERE doc_r_object_id = $1
        ORDER BY i_vstamp DESC
        LIMIT 1`,
@@ -217,7 +217,7 @@ class EoafService {
 
   async getEnclosureDocument(enclosureId) {
     const { rows } = await query(
-      `SELECT * FROM source_file_path_s
+      `SELECT * FROM eoaf_file_path_s
        WHERE doc_r_object_id = $1
        ORDER BY i_vstamp DESC
        LIMIT 1`,
@@ -228,7 +228,7 @@ class EoafService {
 
   async getDocumentById(id) {
     const { rows } = await query(
-      `SELECT * FROM source_file_path_s WHERE doc_r_object_id = $1 LIMIT 1`,
+      `SELECT * FROM eoaf_file_path_s WHERE doc_r_object_id = $1 LIMIT 1`,
       [id]
     );
     return rows[0] || null;
