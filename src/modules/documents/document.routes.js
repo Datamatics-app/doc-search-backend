@@ -11,7 +11,7 @@ router.use(authenticate);
 /**
  * GET /api/v1/documents/:id
  *
- * Returns the file for any doc_r_object_id stored in source_file_path_s.
+ * Returns the file for any doc_r_object_id stored in eoaf_file_path_s.
  * Add ?download=true to trigger a browser file download instead of inline.
  *
  * Works for all EOAF types (forms, enclosures, attachments, LD, ScrapCAD …).
@@ -23,7 +23,7 @@ router.get('/:id', idValidator, validate, documentController.getDocument.bind(do
  *
  * Accepts a JSON body: { ids: ["id1", "id2", ...] }   (max 50 ids)
  *
- * Fetches every matching file from source_file_path_s, bundles them into a
+ * Fetches every matching file from eoaf_file_path_s, bundles them into a
  * zip archive, and streams the archive to the client.
  *
  * Supports mixed file types — pdf, doc, docx, tiff, jpg, png, etc.
