@@ -1,5 +1,5 @@
 // eoaf.service.js
-const { query, withTransaction } = require('../../config/database');
+const { eoafQuery } = require('../../config/database');
 
 const parseInteger = (value) => {
   if (value === undefined || value === null || value === '') return null;
@@ -110,12 +110,12 @@ class EoafService {
     const offset = (parseInteger(page) - 1) * parseInteger(limit);
     const { whereClause, params } = buildWhereClause(filters);
 
-    const countResult = await query(
+    const countResult = await eoafQuery(
       `SELECT COUNT(*) AS count ${BASE_JOIN} ${whereClause}`,
       params
     );
 
-    const { rows } = await query(
+    const { rows } = await eoafQuery(
       `SELECT ${SEARCH_SELECT}
        ${BASE_JOIN}
        ${whereClause}
@@ -133,7 +133,7 @@ class EoafService {
 
   // Get Single Form (full detail)
   async getFormById(id) {
-    const { rows } = await query(
+    const { rows } = await eoafQuery(
       `SELECT f.*, s.owner_name, s.r_creation_date, s.r_modify_date, s.r_modifier
        ${BASE_JOIN}
        WHERE f.r_object_id = $1
@@ -148,12 +148,12 @@ class EoafService {
     const offset = (parseInteger(page) - 1) * parseInteger(limit);
 
   // COUNT query stays the same
-    const countResult = await query(
+    const countResult = await eoafQuery(
       `SELECT COUNT(*) AS count FROM xoaf_enclosure_s WHERE form_id = $1`,
       [formId]
     );
 
-    const { rows } = await query(
+    const { rows } = await eoafQuery(
       `SELECT 
         e.*,
         fp.doc_file_path,
@@ -196,7 +196,7 @@ class EoafService {
   }
 
   async getEnclosureById(id) {
-    const { rows } = await query(
+    const { rows } = await eoafQuery(
       'SELECT * FROM xoaf_enclosure_s WHERE r_object_id = $1 LIMIT 1',
       [id]
     );
@@ -205,7 +205,7 @@ class EoafService {
 
   // ── Documents ──────────────────────────────────────────────────────────────
   async getFormDocument(formId) {
-    const { rows } = await query(
+    const { rows } = await eoafQuery(
       `SELECT * FROM eoaf_file_path_s
        WHERE doc_r_object_id = $1
        ORDER BY i_vstamp DESC
@@ -216,7 +216,7 @@ class EoafService {
   }
 
   async getEnclosureDocument(enclosureId) {
-    const { rows } = await query(
+    const { rows } = await eoafQuery(
       `SELECT * FROM eoaf_file_path_s
        WHERE doc_r_object_id = $1
        ORDER BY i_vstamp DESC
@@ -227,7 +227,7 @@ class EoafService {
   }
 
   async getDocumentById(id) {
-    const { rows } = await query(
+    const { rows } = await eoafQuery(
       `SELECT * FROM eoaf_file_path_s WHERE doc_r_object_id = $1 LIMIT 1`,
       [id]
     );

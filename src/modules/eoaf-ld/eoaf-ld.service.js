@@ -1,4 +1,4 @@
-const { query } = require('../../config/database');
+const { eoafQuery } = require('../../config/database');
 
 const parseInteger = (value) => {
   if (value === undefined || value === null || value === '') return null;
@@ -42,8 +42,8 @@ class EoafLdService {
     };
     const { whereClause, params } = buildWhereClause(formFilters);
 
-    const countResult = await query(`SELECT COUNT(*) FROM xoaf_ld_form_s ${whereClause}`, params);
-    const { rows } = await query(
+    const countResult = await eoafQuery(`SELECT COUNT(*) FROM xoaf_ld_form_s ${whereClause}`, params);
+    const { rows } = await eoafQuery(
       `SELECT r_object_id, file_ref_no, ld_subject, company_code, approval_level, form_status, clusters
        FROM xoaf_ld_form_s ${whereClause}
        ORDER BY r_object_id DESC
@@ -56,7 +56,7 @@ class EoafLdService {
   }
 
   async getFormById(id) {
-    const { rows } = await query(
+    const { rows } = await eoafQuery(
       'SELECT * FROM xoaf_ld_form_s WHERE r_object_id = $1 LIMIT 1',
       [id]
     );
@@ -77,8 +77,8 @@ class EoafLdService {
     const filters = { form_id, attachment_types };
     const { whereClause, params } = buildWhereClause(filters);
 
-    const countResult = await query(`SELECT COUNT(*) FROM xoaf_ld_enclosures_s ${whereClause}`, params);
-    const { rows } = await query(
+    const countResult = await eoafQuery(`SELECT COUNT(*) FROM xoaf_ld_enclosures_s ${whereClause}`, params);
+    const { rows } = await eoafQuery(
       `SELECT * FROM xoaf_ld_enclosures_s ${whereClause} ORDER BY r_object_id ASC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
       [...params, parseInteger(limit), offset]
     );
@@ -87,7 +87,7 @@ class EoafLdService {
   }
 
   async getEnclosureById(id) {
-    const { rows } = await query(
+    const { rows } = await eoafQuery(
       'SELECT * FROM xoaf_ld_enclosures_s WHERE r_object_id = $1 LIMIT 1',
       [id]
     );
@@ -95,7 +95,7 @@ class EoafLdService {
   }
 
   async getFormDocument(formId) {
-    const { rows } = await query(
+    const { rows } = await eoafQuery(
       'SELECT * FROM eoaf_file_path_s WHERE doc_r_object_id = $1 ORDER BY i_vstamp DESC LIMIT 1',
       [formId]
     );
@@ -103,7 +103,7 @@ class EoafLdService {
   }
 
   async getEnclosureDocument(enclosureId) {
-    const { rows } = await query(
+    const { rows } = await eoafQuery(
       'SELECT * FROM eoaf_file_path_s WHERE doc_r_object_id = $1 ORDER BY i_vstamp DESC LIMIT 1',
       [enclosureId]
     );

@@ -1,4 +1,4 @@
-const { query } = require('../../config/database');
+const { eoafQuery } = require('../../config/database');
 const logger = require('../../config/logger');
 
 class DocumentService {
@@ -37,7 +37,7 @@ class DocumentService {
    * @returns {object|null}     — row from eoaf_file_path_s, or null
    */
   async getByRObjectId(rObjectId) {
-    const { rows } = await query(
+    const { rows } = await eoafQuery(
       `SELECT TOP 1 *
          FROM eoaf_file_path_s
         WHERE r_object_id = $1`,
@@ -47,7 +47,7 @@ class DocumentService {
   }
 
   async getByDocObjectId(docObjectId) {
-    const { rows } = await query(
+    const { rows } = await eoafQuery(
       `SELECT TOP 1 *
          FROM eoaf_file_path_s
         WHERE doc_r_object_id = $1
@@ -88,7 +88,7 @@ class DocumentService {
         ) ranked
        WHERE rn = 1`;
 
-    const { rows } = await query(sql, docObjectIds);
+    const { rows } = await eoafQuery(sql, docObjectIds);
     return rows;
   }
 }
