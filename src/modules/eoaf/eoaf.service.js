@@ -15,6 +15,16 @@ const parseInteger = (value) => {
   return Number.isNaN(parsed) ? null : parsed;
 };
 
+// Safe helpers specifically for pagination so we never send 0/NaN to FETCH NEXT
+const safePage = (value) => {
+  const parsed = parseInteger(value);
+  return parsed && parsed > 0 ? parsed : 1;
+};
+
+const safeLimit = (value) => {
+  const parsed = parseInteger(value);
+  return parsed && parsed > 0 ? parsed : 50;
+};
 
 const buildWhereClause = (filters = {}) => {
   const conditions = [];
@@ -143,7 +153,9 @@ class EoafService {
 
   // Response columns returned in SEARCH_SELECT above.
   async searchForms({ page = 1, limit = 50, ...filters }) {
-    const offset = (parseInteger(page) - 1) * parseInteger(limit);
+    const pageNum  = safePage(page);
+    const limitNum = safeLimit(limit);
+    const offset   = (pageNum - 1) * limitNum;
     const { whereClause, params } = buildWhereClause(filters);
 
     const countResult = await eoafQuery(
@@ -151,7 +163,9 @@ class EoafService {
       params
     );
 
-    const queryParams = [...params, parseInteger(limit), offset];
+    // NOTE: order must match the SQL text below —
+    // OFFSET binds to the FIRST new param, FETCH NEXT binds to the SECOND.
+    const queryParams = [...params, offset, limitNum];
     const { rows } = await eoafQuery(
       `SELECT ${SEARCH_SELECT}
        ${BASE_JOIN}
@@ -180,9 +194,11 @@ class EoafService {
 
   // Enclosures 
   async listEnclosuresByForm(formId, { page = 1, limit = 50 }) {
-    const offset = (parseInteger(page) - 1) * parseInteger(limit);
+    const pageNum  = safePage(page);
+    const limitNum = safeLimit(limit);
+    const offset   = (pageNum - 1) * limitNum;
 
-  // COUNT query stays the same
+    // COUNT query stays the same
     const countResult = await eoafQuery(
       `SELECT COUNT(*) AS count FROM xoaf_enclosure_s WHERE form_id = @p1`,
       [formId]
@@ -211,7 +227,7 @@ class EoafService {
       WHERE e.form_id = @p1
       ORDER BY e.r_object_id ASC
       OFFSET @p2 ROWS FETCH NEXT @p3 ROWS ONLY`,
-      [formId, parseInteger(limit), offset]
+      [formId, offset, limitNum]
     );
 
     const total = parseInt(
