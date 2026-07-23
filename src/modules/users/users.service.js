@@ -5,7 +5,7 @@ class UsersService {
   /**
    * Create a new user
    */
-  async createUser({ email, password, fullName }) {
+  async createUser({ empId, email, password, fullName }) {
     // Check duplicate email
     const { rows: existing } = await query(
       'SELECT id FROM users WHERE email = $1',
@@ -18,16 +18,28 @@ class UsersService {
       throw err;
     }
 
+    // Check duplicate emp_id
+    const { rows: existingEmp } = await query(
+      'SELECT id FROM users WHERE emp_id = $1',
+      [empId]
+    );
+    if (existingEmp.length > 0) {
+      const err = new Error('Employee ID already in use');
+      err.statusCode = 409;
+      err.isOperational = true;
+      throw err;
+    }
+
     const passwordHash = await bcrypt.hash(
       password,
       parseInt(process.env.BCRYPT_ROUNDS) || 12
     );
 
     const { rows } = await query(
-      `INSERT INTO users (email, password_hash, full_name)
-       VALUES ($1, $2, $3)
+      `INSERT INTO users (emp_id, email, password_hash, full_name)
+       VALUES ($1, $2, $3, $4)
        RETURNING id, emp_id, email, full_name, is_active, created_at`,
-      [email.toLowerCase(), passwordHash, fullName]
+      [empId, email.toLowerCase(), passwordHash, fullName]
     );
 
     return this._format(rows[0]);
@@ -38,7 +50,8 @@ class UsersService {
    */
   async findById(id) {
     const { rows } = await query(
-      `SELECT id, emp_id, email, full_name, is_active, last_login_at, created_at, updated_at
+      `SELECT id, emp_id, email, full_name, is_active, last_login_at, 
+              created_at, updated_at, failed_attempts, locked_until
        FROM users WHERE id = $1`,
       [id]
     );
@@ -70,6 +83,25 @@ class UsersService {
   }
 
   /**
+   * Find user by emp_id
+   */
+  async findByEmpId(empId) {
+    const { rows } = await query(
+      `SELECT id, emp_id, email, full_name, is_active, last_login_at, 
+              created_at, updated_at
+       FROM users WHERE emp_id = $1`,
+      [empId]
+    );
+    if (rows.length === 0) {
+      const err = new Error('User not found');
+      err.statusCode = 404;
+      err.isOperational = true;
+      throw err;
+    }
+    return this._format(rows[0]);
+  }
+
+  /**
    * List users with pagination & filters
    */
   async listUsers({ page = 1, limit = 20, search = '', isActive }) {
@@ -80,7 +112,7 @@ class UsersService {
     if (search) {
       params.push(`%${search}%`);
       conditions.push(
-        `(u.email ILIKE $${params.length} OR u.full_name ILIKE $${params.length})`
+        `(u.email ILIKE $${params.length} OR u.full_name ILIKE $${params.length} OR u.emp_id ILIKE $${params.length})`
       );
     }
 
@@ -99,7 +131,7 @@ class UsersService {
     params.push(limit, offset);
     const { rows } = await query(
       `SELECT u.id, u.emp_id, u.email, u.full_name,
-              u.is_active, u.last_login_at, u.created_at,
+              u.is_active, u.last_login_at, u.created_at, u.updated_at,
               COALESCE(
                 json_agg(r.name) FILTER (WHERE r.name IS NOT NULL), '[]'
               ) AS roles
@@ -107,7 +139,8 @@ class UsersService {
        LEFT JOIN user_roles ur ON ur.user_id = u.id
        LEFT JOIN roles r ON r.id = ur.role_id
        ${whereClause}
-       GROUP BY u.id
+       GROUP BY u.id, u.emp_id, u.email, u.full_name,
+                u.is_active, u.last_login_at, u.created_at, u.updated_at
        ORDER BY u.created_at DESC
        LIMIT $${params.length - 1} OFFSET $${params.length}`,
       params
@@ -122,7 +155,7 @@ class UsersService {
   /**
    * Update user
    */
-  async updateUser(id, { fullName, email }) {
+  async updateUser(id, { fullName, email, empId }) {
     await this.findById(id); // ensure exists
 
     const updates = [];
@@ -146,6 +179,21 @@ class UsersService {
       }
       params.push(email.toLowerCase());
       updates.push(`email = $${params.length}`);
+    }
+    if (empId !== undefined) {
+      // Check emp_id uniqueness
+      const { rows: dup } = await query(
+        'SELECT id FROM users WHERE emp_id = $1 AND id != $2',
+        [empId, id]
+      );
+      if (dup.length > 0) {
+        const err = new Error('Employee ID already in use');
+        err.statusCode = 409;
+        err.isOperational = true;
+        throw err;
+      }
+      params.push(empId);
+      updates.push(`emp_id = $${params.length}`);
     }
 
     if (updates.length === 0) {
@@ -239,6 +287,8 @@ class UsersService {
       roles: row.roles || [],
       createdAt: row.created_at,
       updatedAt: row.updated_at,
+      failedAttempts: row.failed_attempts,
+      lockedUntil: row.locked_until,
     };
   }
 }

@@ -58,7 +58,7 @@ class AuthService {
   async getOrCreateUserFromLDAP(email, ldapUser) {
     // Check if user exists
     const { rows } = await query(
-      `SELECT id, uuid, email, first_name, last_name, is_active
+      `SELECT id, emp_id, email, full_name, is_active
        FROM users WHERE email = $1`,
       [email.toLowerCase()]
     );
@@ -68,14 +68,16 @@ class AuthService {
     }
 
     // Create new user from LDAP data
-    const userId = uuidv4();
+    const empId = uuidv4();
     const dummyPasswordHash = await bcrypt.hash(uuidv4(), parseInt(process.env.BCRYPT_ROUNDS, 10) || 12);
+    const fullName = ldapUser.fullName
+      || [ldapUser.firstName, ldapUser.lastName].filter(Boolean).join(' ');
 
     const { rows: newUserRows } = await query(
-      `INSERT INTO users (uuid, email, password_hash, first_name, last_name, is_active, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW())
-       RETURNING id, uuid, email, first_name, last_name, is_active`,
-      [userId, email.toLowerCase(), dummyPasswordHash, ldapUser.firstName, ldapUser.lastName, true]
+      `INSERT INTO users (emp_id, email, password_hash, full_name, is_active, created_at)
+       VALUES ($1, $2, $3, $4, $5, NOW())
+       RETURNING id, emp_id, email, full_name, is_active`,
+      [empId, email.toLowerCase(), dummyPasswordHash, fullName, true]
     );
 
     return newUserRows[0];
@@ -139,7 +141,7 @@ class AuthService {
     } else {
       // Inline Password Authentication (default)
       const { rows } = await query(
-        `SELECT id, uuid, email, password_hash, first_name, last_name, is_active,
+        `SELECT id, emp_id, email, password_hash, full_name, is_active,
                 failed_attempts, locked_until
          FROM users WHERE email = $1`,
         [email.toLowerCase()]
@@ -191,7 +193,7 @@ class AuthService {
     const roles = roleRows.map(r => r.name);
 
     // Generate tokens
-    const tokenPayload = { userId: user.id, uuid: user.uuid, email: user.email, roles };
+    const tokenPayload = { userId: user.id, empId: user.emp_id, email: user.email, roles };
     const accessToken = generateAccessToken(tokenPayload);
     const refreshToken = generateRefreshToken({ userId: user.id });
 
@@ -216,10 +218,9 @@ class AuthService {
       refreshToken,
       user: {
         id: user.id,
-        uuid: user.uuid,
+        empId: user.emp_id,
         email: user.email,
-        firstName: user.first_name,
-        lastName: user.last_name,
+        fullName: user.full_name,
         roles,
       },
     };
@@ -243,7 +244,7 @@ class AuthService {
     // Check DB for token (not revoked, not expired)
     const { rows } = await query(
       `SELECT rt.id, rt.user_id, rt.revoked_at, rt.expires_at,
-              u.email, u.uuid, u.first_name, u.last_name, u.is_active
+              u.email, u.emp_id, u.full_name, u.is_active
        FROM refresh_tokens rt
        INNER JOIN users u ON u.id = rt.user_id
        WHERE rt.token = $1`,
@@ -297,7 +298,7 @@ class AuthService {
 
     const newAccessToken = generateAccessToken({
       userId: tokenRow.user_id,
-      uuid: tokenRow.uuid,
+      empId: tokenRow.emp_id,
       email: tokenRow.email,
       roles,
     });
