@@ -1,6 +1,14 @@
 // eoaf.service.js
 const { eoafQuery } = require('../../config/database');
 
+const DEFAULT_EOAF_MODULES = [
+  'EOAF',
+  'Change Order beyond contingency',
+  'Change Order within contingency',
+  'Single Party Approval',
+  'Single Page Approval',
+];
+
 const parseInteger = (value) => {
   if (value === undefined || value === null || value === '') return null;
   const parsed = parseInt(value, 10);
@@ -16,6 +24,34 @@ const buildWhereClause = (filters = {}) => {
     params.push(value);
     return `@p${params.length}`;
   };
+
+  // ── Default / selected module filters ─────────────────────────────────────
+  // Production-equivalent logic:
+  // f.module IN (
+  //   'EOAF',
+  //   'Change Order beyond contingency',
+  //   'Change Order within contingency',
+  //   'Single Party Approval',
+  //   'Single Page Approval'
+  // )
+  //
+  // If module/input_module is not provided, default production modules are used.
+  const modules = filters.module ?? filters.input_module;
+
+  const selectedModules =
+    modules === undefined || modules === null || modules === ''
+      ? DEFAULT_EOAF_MODULES
+      : Array.isArray(modules)
+        ? modules
+        : [modules];
+
+  if (selectedModules.length > 0) {
+    const modulePlaceholders = selectedModules.map(addParam);
+
+    conditions.push(
+      `f.module IN (${modulePlaceholders.join(', ')})`
+    );
+  }
 
   // ── Exact-match filters ───────────────────────────────────────────────────
 
@@ -165,7 +201,7 @@ class EoafService {
         doc_file_path,
         ROW_NUMBER() OVER (
           PARTITION BY doc_r_object_id 
-          ORDER BY i_vstamp DESC   -- picks the latest vstamp row
+          ORDER BY r_object_id DESC
         ) AS rn
       FROM eoaf_file_path_s
     ) fp 
@@ -207,7 +243,7 @@ class EoafService {
     const { rows } = await eoafQuery(
       `SELECT TOP 1 * FROM eoaf_file_path_s
        WHERE doc_r_object_id = @p1
-       ORDER BY i_vstamp DESC`,
+       ORDER BY r_object_id DESC`,
       [formId]
     );
     return rows[0] || null;
@@ -217,7 +253,7 @@ class EoafService {
     const { rows } = await eoafQuery(
       `SELECT TOP 1 * FROM eoaf_file_path_s
        WHERE doc_r_object_id = @p1
-       ORDER BY i_vstamp DESC`,
+       ORDER BY r_object_id DESC`,
       [enclosureId]
     );
     return rows[0] || null;
