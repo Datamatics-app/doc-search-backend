@@ -11,14 +11,10 @@ const createUserValidators = [
     .isLength({ min: 8 }).withMessage('Password must be at least 8 characters')
     .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#])/)
     .withMessage('Password must contain uppercase, lowercase, number, and special character'),
-  body('firstName')
+  body('fullName')
     .trim()
-    .notEmpty().withMessage('First name is required')
-    .isLength({ max: 100 }).withMessage('First name too long'),
-  body('lastName')
-    .trim()
-    .notEmpty().withMessage('Last name is required')
-    .isLength({ max: 100 }).withMessage('Last name too long'),
+    .notEmpty().withMessage('Full name is required')
+    .isLength({ max: 201 }).withMessage('Full name too long'),
 ];
 
 const updateUserValidators = [
@@ -27,16 +23,11 @@ const updateUserValidators = [
     .trim()
     .isEmail().withMessage('Invalid email format')
     .normalizeEmail(),
-  body('firstName')
+  body('fullName')
     .optional()
     .trim()
-    .notEmpty().withMessage('First name cannot be empty')
-    .isLength({ max: 100 }).withMessage('First name too long'),
-  body('lastName')
-    .optional()
-    .trim()
-    .notEmpty().withMessage('Last name cannot be empty')
-    .isLength({ max: 100 }).withMessage('Last name too long'),
+    .notEmpty().withMessage('Full name cannot be empty')
+    .isLength({ max: 201 }).withMessage('Full name too long'),
 ];
 
 const changePasswordValidators = [

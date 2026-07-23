@@ -5,7 +5,7 @@ class UsersService {
   /**
    * Create a new user
    */
-  async createUser({ email, password, firstName, lastName }) {
+  async createUser({ email, password, fullName }) {
     // Check duplicate email
     const { rows: existing } = await query(
       'SELECT id FROM users WHERE email = $1',
@@ -24,10 +24,10 @@ class UsersService {
     );
 
     const { rows } = await query(
-      `INSERT INTO users (email, password_hash, first_name, last_name)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, uuid, email, first_name, last_name, is_active, created_at`,
-      [email.toLowerCase(), passwordHash, firstName, lastName]
+      `INSERT INTO users (email, password_hash, full_name)
+       VALUES ($1, $2, $3)
+       RETURNING id, emp_id, email, full_name, is_active, created_at`,
+      [email.toLowerCase(), passwordHash, fullName]
     );
 
     return this._format(rows[0]);
@@ -38,7 +38,7 @@ class UsersService {
    */
   async findById(id) {
     const { rows } = await query(
-      `SELECT id, uuid, email, first_name, last_name, is_active, last_login_at, created_at, updated_at
+      `SELECT id, emp_id, email, full_name, is_active, last_login_at, created_at, updated_at
        FROM users WHERE id = $1`,
       [id]
     );
@@ -56,7 +56,7 @@ class UsersService {
    */
   async findByEmail(email) {
     const { rows } = await query(
-      `SELECT id, uuid, email, first_name, last_name, is_active
+      `SELECT id, emp_id, email, full_name, is_active
        FROM users WHERE email = $1`,
       [email.toLowerCase()]
     );
@@ -80,7 +80,7 @@ class UsersService {
     if (search) {
       params.push(`%${search}%`);
       conditions.push(
-        `(u.email ILIKE $${params.length} OR u.first_name ILIKE $${params.length} OR u.last_name ILIKE $${params.length})`
+        `(u.email ILIKE $${params.length} OR u.full_name ILIKE $${params.length})`
       );
     }
 
@@ -98,7 +98,7 @@ class UsersService {
 
     params.push(limit, offset);
     const { rows } = await query(
-      `SELECT u.id, u.uuid, u.email, u.first_name, u.last_name,
+      `SELECT u.id, u.emp_id, u.email, u.full_name,
               u.is_active, u.last_login_at, u.created_at,
               COALESCE(
                 json_agg(r.name) FILTER (WHERE r.name IS NOT NULL), '[]'
@@ -122,19 +122,15 @@ class UsersService {
   /**
    * Update user
    */
-  async updateUser(id, { firstName, lastName, email }) {
+  async updateUser(id, { fullName, email }) {
     await this.findById(id); // ensure exists
 
     const updates = [];
     const params = [];
 
-    if (firstName !== undefined) {
-      params.push(firstName);
-      updates.push(`first_name = $${params.length}`);
-    }
-    if (lastName !== undefined) {
-      params.push(lastName);
-      updates.push(`last_name = $${params.length}`);
+    if (fullName !== undefined) {
+      params.push(fullName);
+      updates.push(`full_name = $${params.length}`);
     }
     if (email !== undefined) {
       // Check email uniqueness
@@ -163,7 +159,7 @@ class UsersService {
     const { rows } = await query(
       `UPDATE users SET ${updates.join(', ')}
        WHERE id = $${params.length}
-       RETURNING id, uuid, email, first_name, last_name, is_active, updated_at`,
+       RETURNING id, emp_id, email, full_name, is_active, updated_at`,
       params
     );
 
@@ -235,10 +231,9 @@ class UsersService {
     if (!row) return null;
     return {
       id: row.id,
-      uuid: row.uuid,
+      empId: row.emp_id,
       email: row.email,
-      firstName: row.first_name,
-      lastName: row.last_name,
+      fullName: row.full_name,
       isActive: row.is_active,
       lastLoginAt: row.last_login_at,
       roles: row.roles || [],
