@@ -29,7 +29,7 @@ const buildWhereClause = (filters = {}, allowedColumns) => {
     const column = allowedColumns[key];
     if (!column || value === undefined || value === null || value === '') continue;
     params.push(value);
-    conditions.push(`${column} = $${params.length}`);
+    conditions.push(`${column} = @p${params.length}`);
   }
   return { whereClause: conditions.length ? `WHERE ${conditions.join(' AND ')}` : '', params };
 };
@@ -52,14 +52,14 @@ class EoafGeneralService {
     const { whereClause, params } = buildWhereClause(formFilters, ALLOWED_FORM_COLUMNS);
 
     const countResult = await eoafQuery(`SELECT COUNT(*) FROM xoaf_general_form_s ${whereClause}`, params);
+    const queryParams = [...params, parseInteger(limit), offset];
     const { rows } = await eoafQuery(
       `SELECT r_object_id, memo_no, c_subject, category, sub_category, budget, budget_type,
               status, prepared_by, prepared_date, company_code_desc, clusters
        FROM xoaf_general_form_s ${whereClause}
        ORDER BY r_object_id DESC
-       LIMIT $${params.length + 1}
-       OFFSET $${params.length + 2}`,
-      [...params, parseInteger(limit), offset]
+       OFFSET @p${params.length + 1} ROWS FETCH NEXT @p${params.length + 2} ROWS ONLY`,
+      queryParams
     );
 
     return { rows, total: parseInt(countResult.rows[0].count, 10) };
@@ -67,7 +67,7 @@ class EoafGeneralService {
 
   async getFormById(id) {
     const { rows } = await eoafQuery(
-      'SELECT * FROM xoaf_general_form_s WHERE r_object_id = $1 LIMIT 1',
+      'SELECT TOP 1 * FROM xoaf_general_form_s WHERE r_object_id = @p1',
       [id]
     );
     return rows[0] || null;
@@ -87,9 +87,10 @@ class EoafGeneralService {
     const { whereClause, params } = buildWhereClause(filters, ALLOWED_ATTACHMENT_COLUMNS);
 
     const countResult = await eoafQuery(`SELECT COUNT(*) FROM xoaf_attachments_s ${whereClause}`, params);
+    const queryParams = [...params, parseInteger(limit), offset];
     const { rows } = await eoafQuery(
-      `SELECT * FROM xoaf_attachments_s ${whereClause} ORDER BY r_object_id ASC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
-      [...params, parseInteger(limit), offset]
+      `SELECT * FROM xoaf_attachments_s ${whereClause} ORDER BY r_object_id ASC OFFSET @p${params.length + 1} ROWS FETCH NEXT @p${params.length + 2} ROWS ONLY`,
+      queryParams
     );
 
     return { rows, total: parseInt(countResult.rows[0].count, 10) };
@@ -97,7 +98,7 @@ class EoafGeneralService {
 
   async getAttachmentById(id) {
     const { rows } = await eoafQuery(
-      'SELECT * FROM xoaf_attachments_s WHERE r_object_id = $1 LIMIT 1',
+      'SELECT TOP 1 * FROM xoaf_attachments_s WHERE r_object_id = @p1',
       [id]
     );
     return rows[0] || null;
@@ -106,7 +107,7 @@ class EoafGeneralService {
   // Document retrieval (shared eoaf_file_path_s table)
   async getFormDocument(formId) {
     const { rows } = await eoafQuery(
-      'SELECT * FROM eoaf_file_path_s WHERE doc_r_object_id = $1 ORDER BY i_vstamp DESC LIMIT 1',
+      'SELECT TOP 1 * FROM eoaf_file_path_s WHERE doc_r_object_id = @p1 ORDER BY i_vstamp DESC',
       [formId]
     );
     return rows[0] || null;
@@ -114,7 +115,7 @@ class EoafGeneralService {
 
   async getAttachmentDocument(attachmentId) {
     const { rows } = await eoafQuery(
-      'SELECT * FROM eoaf_file_path_s WHERE doc_r_object_id = $1 ORDER BY i_vstamp DESC LIMIT 1',
+      'SELECT TOP 1 * FROM eoaf_file_path_s WHERE doc_r_object_id = @p1 ORDER BY i_vstamp DESC',
       [attachmentId]
     );
     return rows[0] || null;

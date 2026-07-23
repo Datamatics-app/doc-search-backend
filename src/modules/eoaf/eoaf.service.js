@@ -14,19 +14,19 @@ const buildWhereClause = (filters = {}) => {
 
   const addParam = (value) => {
     params.push(value);
-    return `$${params.length}`;
+    return `@p${params.length}`;
   };
 
   // ── Exact-match filters ───────────────────────────────────────────────────
 
   // Subject  (xoaf_form_s.eoaf_subject)  — partial match for usability
   if (filters.eoaf_subject) {
-    conditions.push(`f.eoaf_subject ILIKE ${addParam(`%${filters.eoaf_subject}%`)}`);
+    conditions.push(`f.eoaf_subject LIKE ${addParam(`%${filters.eoaf_subject}%`)}`);
   }
 
   // OAF Number  (xoaf_form_s.oaf_num)  — partial match
   if (filters.oaf_num) {
-    conditions.push(`f.oaf_num ILIKE ${addParam(`%${filters.oaf_num}%`)}`);
+    conditions.push(`f.oaf_num LIKE ${addParam(`%${filters.oaf_num}%`)}`);
   }
 
   // Status (exact)
@@ -115,17 +115,17 @@ class EoafService {
       params
     );
 
+    const queryParams = [...params, parseInteger(limit), offset];
     const { rows } = await eoafQuery(
       `SELECT ${SEARCH_SELECT}
        ${BASE_JOIN}
        ${whereClause}
        ORDER BY f.r_object_id DESC
-       LIMIT  $${params.length + 1}
-       OFFSET $${params.length + 2}`,
-      [...params, parseInteger(limit), offset]
+       OFFSET @p${params.length + 1} ROWS FETCH NEXT @p${params.length + 2} ROWS ONLY`,
+      queryParams
     );
 
-    // COUNT alias works for both pg and mssql after explicit AS count
+    // COUNT alias uses an explicit AS count so the result shape is consistent for MSSQL.
     const total = parseInt(countResult.rows[0]?.count ?? countResult.rows[0]?.COUNT ?? 0, 10);
 
     return { rows, total };
@@ -134,10 +134,9 @@ class EoafService {
   // Get Single Form (full detail)
   async getFormById(id) {
     const { rows } = await eoafQuery(
-      `SELECT f.*, s.owner_name, s.r_creation_date, s.r_modify_date, s.r_modifier
+      `SELECT TOP 1 f.*, s.owner_name, s.r_creation_date, s.r_modify_date, s.r_modifier
        ${BASE_JOIN}
-       WHERE f.r_object_id = $1
-       LIMIT 1`,
+       WHERE f.r_object_id = @p1`,
       [id]
     );
     return rows[0] || null;
@@ -149,7 +148,7 @@ class EoafService {
 
   // COUNT query stays the same
     const countResult = await eoafQuery(
-      `SELECT COUNT(*) AS count FROM xoaf_enclosure_s WHERE form_id = $1`,
+      `SELECT COUNT(*) AS count FROM xoaf_enclosure_s WHERE form_id = @p1`,
       [formId]
     );
 
@@ -173,9 +172,9 @@ class EoafService {
       ON fp.doc_r_object_id = e.r_object_id 
       AND fp.rn = 1                -- only the max vstamp row
       LEFT JOIN dm_sysobject_s s ON s.r_object_id = e.form_id
-      WHERE e.form_id = $1
+      WHERE e.form_id = @p1
       ORDER BY e.r_object_id ASC
-      LIMIT $2 OFFSET $3`,
+      OFFSET @p2 ROWS FETCH NEXT @p3 ROWS ONLY`,
       [formId, parseInteger(limit), offset]
     );
 
@@ -197,7 +196,7 @@ class EoafService {
 
   async getEnclosureById(id) {
     const { rows } = await eoafQuery(
-      'SELECT * FROM xoaf_enclosure_s WHERE r_object_id = $1 LIMIT 1',
+      'SELECT TOP 1 * FROM xoaf_enclosure_s WHERE r_object_id = @p1',
       [id]
     );
     return rows[0] || null;
@@ -206,10 +205,9 @@ class EoafService {
   // ── Documents ──────────────────────────────────────────────────────────────
   async getFormDocument(formId) {
     const { rows } = await eoafQuery(
-      `SELECT * FROM eoaf_file_path_s
-       WHERE doc_r_object_id = $1
-       ORDER BY i_vstamp DESC
-       LIMIT 1`,
+      `SELECT TOP 1 * FROM eoaf_file_path_s
+       WHERE doc_r_object_id = @p1
+       ORDER BY i_vstamp DESC`,
       [formId]
     );
     return rows[0] || null;
@@ -217,10 +215,9 @@ class EoafService {
 
   async getEnclosureDocument(enclosureId) {
     const { rows } = await eoafQuery(
-      `SELECT * FROM eoaf_file_path_s
-       WHERE doc_r_object_id = $1
-       ORDER BY i_vstamp DESC
-       LIMIT 1`,
+      `SELECT TOP 1 * FROM eoaf_file_path_s
+       WHERE doc_r_object_id = @p1
+       ORDER BY i_vstamp DESC`,
       [enclosureId]
     );
     return rows[0] || null;
@@ -228,7 +225,7 @@ class EoafService {
 
   async getDocumentById(id) {
     const { rows } = await eoafQuery(
-      `SELECT * FROM eoaf_file_path_s WHERE doc_r_object_id = $1 LIMIT 1`,
+      `SELECT TOP 1 * FROM eoaf_file_path_s WHERE doc_r_object_id = @p1`,
       [id]
     );
     return rows[0] || null;

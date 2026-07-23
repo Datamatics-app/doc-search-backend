@@ -37,46 +37,6 @@ const getPool = () => {
   return poolPromise;
 };
 
-
-/**
- * Convert PostgreSQL $1,$2 placeholders → MSSQL @p1,@p2
- * and return the rewritten SQL string.
- */
-const convertPlaceholders = (pgSql) =>
-  pgSql.replace(/\$(\d+)/g, '@p$1');
-
-/**
- * Convert ILIKE → LIKE  (MSSQL is case-insensitive by default per collation)
- */
-const convertIlike = (sqlStr) =>
-  sqlStr.replace(/\bILIKE\b/gi, 'LIKE');
-
-/**
- * Convert PostgreSQL double-quoted identifiers → MSSQL square brackets.
- * e.g. "type" → [type]
- */
-const convertQuotedIdentifiers = (sqlStr) =>
-  sqlStr.replace(/"([^"]+)"/g, '[$1]');
-
-
-const convertPagination = (sqlStr) =>
-  sqlStr.replace(
-    /LIMIT\s+(@p\d+)\s+OFFSET\s+(@p\d+)/gi,
-    'OFFSET $2 ROWS FETCH NEXT $1 ROWS ONLY'
-  );
-
-/**
- * Apply all SQL translations in order.
- */
-const translateSql = (pgSql) => {
-  let out = pgSql;
-  out = convertPlaceholders(out);
-  out = convertIlike(out);
-  out = convertQuotedIdentifiers(out);
-  out = convertPagination(out);
-  return out;
-};
-
 /**
  * Bind all positional params to the MSSQL request as @p1, @p2 ...
  * Type inference: Date → DateTime, number → numeric, else NVarChar.
@@ -103,21 +63,18 @@ const bindParams = (request, params = []) => {
 
 
 /**
- * Execute a parameterised query.
- * Accepts PostgreSQL-style SQL ($1,$2, ILIKE, LIMIT/OFFSET, "quoted")
- * and translates automatically for MSSQL.
+ * Execute a parameterised query using MSSQL-native SQL.
  *
- * @param {string} pgSql   - PostgreSQL-style SQL
+ * @param {string} sqlText - MSSQL-compatible SQL text
  * @param {Array}  params  - Parameter values
  * @returns {{ rows: Array, rowCount: number }}
  */
-const query = async (pgSql, params = []) => {
+const query = async (sqlText, params = []) => {
   const pool    = await getPool();
-  const mssql   = translateSql(pgSql);
   const request = pool.request();
   bindParams(request, params);
 
-  const result = await request.query(mssql);
+  const result = await request.query(sqlText);
   return {
     rows:     result.recordset || [],
     rowCount: result.rowsAffected?.[0] ?? 0,
@@ -135,11 +92,10 @@ const withTransaction = async (fn) => {
 
   await transaction.begin();
   try {
-    const txQuery = async (pgSql, params = []) => {
-      const mssqlSql = translateSql(pgSql);
+    const txQuery = async (sqlText, params = []) => {
       const request  = new sql.Request(transaction);
       bindParams(request, params);
-      const result = await request.query(mssqlSql);
+      const result = await request.query(sqlText);
       return {
         rows:     result.recordset || [],
         rowCount: result.rowsAffected?.[0] ?? 0,

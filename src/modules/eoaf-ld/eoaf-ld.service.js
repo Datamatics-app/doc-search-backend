@@ -23,7 +23,7 @@ const buildWhereClause = (filters = {}) => {
     const column = ALLOWED_COLUMNS[key];
     if (!column || value === undefined || value === null || value === '') continue;
     params.push(value);
-    conditions.push(`${column} = $${params.length}`);
+    conditions.push(`${column} = @p${params.length}`);
   }
   return { whereClause: conditions.length ? `WHERE ${conditions.join(' AND ')}` : '', params };
 };
@@ -43,13 +43,13 @@ class EoafLdService {
     const { whereClause, params } = buildWhereClause(formFilters);
 
     const countResult = await eoafQuery(`SELECT COUNT(*) FROM xoaf_ld_form_s ${whereClause}`, params);
+    const queryParams = [...params, parseInteger(limit), offset];
     const { rows } = await eoafQuery(
       `SELECT r_object_id, file_ref_no, ld_subject, company_code, approval_level, form_status, clusters
        FROM xoaf_ld_form_s ${whereClause}
        ORDER BY r_object_id DESC
-       LIMIT $${params.length + 1}
-       OFFSET $${params.length + 2}`,
-      [...params, parseInteger(limit), offset]
+       OFFSET @p${params.length + 1} ROWS FETCH NEXT @p${params.length + 2} ROWS ONLY`,
+      queryParams
     );
 
     return { rows, total: parseInt(countResult.rows[0].count, 10) };
@@ -57,7 +57,7 @@ class EoafLdService {
 
   async getFormById(id) {
     const { rows } = await eoafQuery(
-      'SELECT * FROM xoaf_ld_form_s WHERE r_object_id = $1 LIMIT 1',
+      'SELECT TOP 1 * FROM xoaf_ld_form_s WHERE r_object_id = @p1',
       [id]
     );
     return rows[0] || null;
@@ -78,9 +78,10 @@ class EoafLdService {
     const { whereClause, params } = buildWhereClause(filters);
 
     const countResult = await eoafQuery(`SELECT COUNT(*) FROM xoaf_ld_enclosures_s ${whereClause}`, params);
+    const queryParams = [...params, parseInteger(limit), offset];
     const { rows } = await eoafQuery(
-      `SELECT * FROM xoaf_ld_enclosures_s ${whereClause} ORDER BY r_object_id ASC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
-      [...params, parseInteger(limit), offset]
+      `SELECT * FROM xoaf_ld_enclosures_s ${whereClause} ORDER BY r_object_id ASC OFFSET @p${params.length + 1} ROWS FETCH NEXT @p${params.length + 2} ROWS ONLY`,
+      queryParams
     );
 
     return { rows, total: parseInt(countResult.rows[0].count, 10) };
@@ -88,7 +89,7 @@ class EoafLdService {
 
   async getEnclosureById(id) {
     const { rows } = await eoafQuery(
-      'SELECT * FROM xoaf_ld_enclosures_s WHERE r_object_id = $1 LIMIT 1',
+      'SELECT TOP 1 * FROM xoaf_ld_enclosures_s WHERE r_object_id = @p1',
       [id]
     );
     return rows[0] || null;
@@ -96,7 +97,7 @@ class EoafLdService {
 
   async getFormDocument(formId) {
     const { rows } = await eoafQuery(
-      'SELECT * FROM eoaf_file_path_s WHERE doc_r_object_id = $1 ORDER BY i_vstamp DESC LIMIT 1',
+      'SELECT TOP 1 * FROM eoaf_file_path_s WHERE doc_r_object_id = @p1 ORDER BY i_vstamp DESC',
       [formId]
     );
     return rows[0] || null;
@@ -104,7 +105,7 @@ class EoafLdService {
 
   async getEnclosureDocument(enclosureId) {
     const { rows } = await eoafQuery(
-      'SELECT * FROM eoaf_file_path_s WHERE doc_r_object_id = $1 ORDER BY i_vstamp DESC LIMIT 1',
+      'SELECT TOP 1 * FROM eoaf_file_path_s WHERE doc_r_object_id = @p1 ORDER BY i_vstamp DESC',
       [enclosureId]
     );
     return rows[0] || null;

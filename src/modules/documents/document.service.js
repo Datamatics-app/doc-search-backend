@@ -40,7 +40,7 @@ class DocumentService {
     const { rows } = await eoafQuery(
       `SELECT TOP 1 *
          FROM eoaf_file_path_s
-        WHERE r_object_id = $1`,
+        WHERE r_object_id = @p1`,
       [rObjectId]
     );
     return rows[0] || null;
@@ -50,7 +50,7 @@ class DocumentService {
     const { rows } = await eoafQuery(
       `SELECT TOP 1 *
          FROM eoaf_file_path_s
-        WHERE doc_r_object_id = $1
+        WHERE doc_r_object_id = @p1
         ORDER BY r_object_id DESC`,
       [docObjectId]
     );
@@ -63,7 +63,7 @@ class DocumentService {
    * highest r_object_id if duplicates exist for a given doc_r_object_id.
    *
    * T-SQL has no ANY()/array parameter support like Postgres, so this
-   * builds a numbered placeholder list ($1, $2, $3 ...) for an IN clause,
+   * builds a numbered placeholder list (@p1, @p2, @p3 ...) for an IN clause,
    * and uses ROW_NUMBER() OVER (PARTITION BY ...) instead of Postgres's
    * DISTINCT ON to pick the latest row per id.
    *
@@ -73,7 +73,7 @@ class DocumentService {
   async getManyByDocObjectIds(docObjectIds) {
     if (!docObjectIds.length) return [];
 
-    const placeholders = docObjectIds.map((_, i) => `$${i + 1}`).join(', ');
+    const placeholders = docObjectIds.map((_, i) => `@p${i + 1}`).join(', ');
 
     const sql = `
       SELECT *
