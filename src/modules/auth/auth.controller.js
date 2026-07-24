@@ -8,10 +8,9 @@ class AuthController {
    */
   async login(req, res) {
     try {
-      const { email, password } = req.body;
       const ipAddress = req.ip || req.connection.remoteAddress;
 
-      const result = await authService.login(email, password, ipAddress);
+      const result = await authService.login(req.body, ipAddress);
 
       await auditService.log({
         userId: result.user.id,

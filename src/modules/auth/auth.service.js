@@ -3,6 +3,7 @@ const { v4: uuidv4 } = require('uuid');
 const { query } = require('../../config/database');
 const { generateAccessToken, generateRefreshToken, verifyRefreshToken } = require('../../utils/jwt');
 const ldapConfig = require('../../config/ldap');
+const azureAd = require('../../config/azuread');
 
 // Precomputed dummy hash so non-existent users take the same code path
 // (bcrypt.compare) as real users — prevents timing-based email enumeration.
@@ -84,6 +85,73 @@ class AuthService {
   }
 
   /**
+   * Verify the Azure AD id_token and pull out the claims we care about.
+   */
+  async authenticateWithSSO(idToken) {
+    let claims;
+    try {
+      claims = await azureAd.verifyIdToken(idToken);
+    } catch (err) {
+      console.log(err)
+      const error = new Error('Invalid or expired SSO token');
+      error.statusCode = 401;
+      error.isOperational = true;
+      throw error;
+    }
+
+    const email = (claims.preferred_username || claims.email || claims.upn || '')
+      .toLowerCase();
+
+    if (!email) {
+      const error = new Error('SSO token did not contain a usable email claim');
+      error.statusCode = 401;
+      error.isOperational = true;
+      throw error;
+    }
+    
+    const employeeId = claims.employeeId || claims.employeeid || null;
+
+    return {
+      email,
+      fullName: claims.name || email,
+      oid: claims.oid || claims.sub,
+      employeeId,
+    };
+  }
+
+  /**
+   * Get or create a user from Azure AD claims — mirrors getOrCreateUserFromLDAP.
+   */
+  async getOrCreateUserFromSSO(email, ssoUser) {
+    const { rows } = await query(
+      `SELECT id, emp_id, email, full_name, is_active
+       FROM users WHERE email = $1`,
+      [email]
+    );
+
+    if (rows.length > 0) {
+      return rows[0];
+    }
+
+    const empId = uuidv4();
+    // SSO users authenticate against Azure AD, never our password_hash —
+    // same "unusable dummy hash" pattern as the LDAP path.
+    const dummyPasswordHash = await bcrypt.hash(
+      uuidv4(),
+      parseInt(process.env.BCRYPT_ROUNDS, 10) || 12
+    );
+
+    const { rows: newUserRows } = await query(
+      `INSERT INTO users (emp_id, email, password_hash, full_name, is_active, created_at)
+       VALUES ($1, $2, $3, $4, $5, NOW())
+       RETURNING id, emp_id, email, full_name, is_active`,
+      [empId, email, dummyPasswordHash, ssoUser.fullName, true]
+    );
+
+    return newUserRows[0];
+  }
+
+  /**
    * Check account lockout status. Throws if currently locked.
    */
   _assertNotLocked(user) {
@@ -124,14 +192,23 @@ class AuthService {
 
   /**
    * Login user — returns access + refresh tokens
-   * Supports both LDAP and inline password authentication based on AUTH_MODE env
+   * Supports LDAP, SSO (Azure AD), and inline password auth based on AUTH_MODE.
+   *
+   * @param {{ email?: string, password?: string, idToken?: string }} payload
+   * @param {string} ipAddress
    */
-  async login(email, password, ipAddress) {
+  async login(payload, ipAddress) {
     const authMode = process.env.AUTH_MODE || 'PASSWORD';
+    const { email, password, idToken } = payload;
 
     let user;
 
-    if (authMode === 'LDAP') {
+    if (authMode === 'SSO') {
+      // Azure AD SSO
+      const ssoUser = await this.authenticateWithSSO(idToken);
+      user = await this.getOrCreateUserFromSSO(ssoUser.email, ssoUser);
+      await this._resetFailedAttempts(user.id);
+    } else if (authMode === 'LDAP') {
       // LDAP Authentication
       const { rows } = await query(`SELECT id, failed_attempts, locked_until, is_active FROM users WHERE email=$1`, [email.toLowerCase()]);
       if (rows[0]) this._assertNotLocked(rows[0]);
@@ -149,8 +226,6 @@ class AuthService {
 
       user = rows[0] || null;
 
-      // Check lockout BEFORE password verification (only meaningful if user exists,
-      // but we don't branch on existence here to avoid leaking timing/existence info)
       if (user) {
         this._assertNotLocked(user);
 
@@ -162,7 +237,6 @@ class AuthService {
         }
       }
 
-      // Verify password — always runs bcrypt.compare, even if user is null
       try {
         await this.authenticateWithPassword(email, password, user);
       } catch (err) {
@@ -172,7 +246,6 @@ class AuthService {
         throw err;
       }
 
-      // Success — reset failed attempts
       await this._resetFailedAttempts(user.id);
     }
 
@@ -197,7 +270,6 @@ class AuthService {
     const accessToken = generateAccessToken(tokenPayload);
     const refreshToken = generateRefreshToken({ userId: user.id });
 
-    // Store refresh token in DB
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 
@@ -207,7 +279,6 @@ class AuthService {
       [user.id, refreshToken, expiresAt]
     );
 
-    // Update last_login_at
     await query(
       'UPDATE users SET last_login_at = NOW() WHERE id = $1',
       [user.id]
